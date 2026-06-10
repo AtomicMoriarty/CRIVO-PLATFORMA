@@ -1,1 +1,6 @@
 project_id = "lgbuywbcpnghqaoaqsxb"
+
+# O webhook do Stripe é chamado pela Stripe (sem JWT do Supabase);
+# a autenticidade é validada pela assinatura STRIPE_WEBHOOK_SECRET.
+[functions.stripe-webhook]
+verify_jwt = false

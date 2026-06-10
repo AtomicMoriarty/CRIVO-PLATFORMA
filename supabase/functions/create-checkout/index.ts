@@ -1,24 +1,36 @@
-import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@16.12.0?target=deno";
 
-serve(async (req) => {
+const cors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
     const body = await req.json();
     const plan = body.plan || body.plano;
     const user_id = body.user_id || body.usuario_id;
-    const success_url = body.success_url;
-    const cancel_url = body.cancel_url;
+    const success_url = body.success_url || "https://crivo.pages.dev/painel?checkout=success";
+    const cancel_url = body.cancel_url || "https://crivo.pages.dev/planos?checkout=cancelled";
     const email = body.email;
-    if (!["pro", "premium"].includes(plan)) throw new Error("Invalid plan");
+    if (!["pro", "premium"].includes(plan)) return json({ error: "Plano inválido." }, 400);
+    if (!user_id) return json({ error: "Usuário não identificado." }, 400);
 
-    const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
+    const secret = Deno.env.get("STRIPE_SECRET_KEY");
+    if (!secret) return json({ error: "Pagamentos ainda não configurados. Fale com contato@adeke.com.br." }, 503);
+
+    const stripe = new Stripe(secret, {
       apiVersion: "2024-06-20",
       httpClient: Stripe.createFetchHttpClient(),
     });
 
-    const price =
-      plan === "pro" ? Deno.env.get("STRIPE_PRICE_PRO_ID") : Deno.env.get("STRIPE_PRICE_PREMIUM_ID");
-    if (!price) throw new Error(`Missing Stripe price for ${plan}`);
+    const price = plan === "pro" ? Deno.env.get("STRIPE_PRICE_PRO_ID") : Deno.env.get("STRIPE_PRICE_PREMIUM_ID");
+    if (!price) return json({ error: `Preço do plano ${plan} não configurado.` }, 503);
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
@@ -29,8 +41,8 @@ serve(async (req) => {
       cancel_url,
     });
 
-    return Response.json({ url: session.url });
+    return json({ url: session.url });
   } catch (error) {
-    return Response.json({ error: String(error?.message || error) }, { status: 400 });
+    return json({ error: String((error as any)?.message || error) }, 400);
   }
 });
