@@ -1,0 +1,11 @@
+# Local CLI state
+supabase/.temp/
+.wrangler/
+
+# Environment / secrets
+.env
+.env.*
+
+# Misc
+node_modules/
+.DS_Store

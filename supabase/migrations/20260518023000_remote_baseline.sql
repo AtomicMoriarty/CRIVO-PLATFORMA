@@ -1,0 +1,1 @@
+-- Remote baseline already present in Supabase before the Crivo platform split.

@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Crivo · by Adeke</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;700;900&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              brand: "#C8963A",
+              navy: "#0A1420",
+              gold: "#C8963A",
+              success: "#3DB882",
+              warning: "#E0913A",
+              danger: "#E05252",
+            },
+            fontFamily: { sans: ["IBM Plex Sans", "sans-serif"], serif: ["Playfair Display", "serif"], mono: ["IBM Plex Mono", "monospace"] },
+          },
+        },
+      };
+    </script>
+    <style>
+      :root{
+        --ink:#0A1420;--ink2:#12202F;--ink3:#1A2D42;
+        --gold:#C8963A;--gold2:#E8B050;--gold3:#F5D080;
+        --gold-bg:rgba(200,150,58,.08);--gold-bg2:rgba(200,150,58,.15);
+        --gold-bd:rgba(200,150,58,.25);--gold-bd2:rgba(200,150,58,.5);
+        --cream:#F4F0E8;--muted:#6B7A8D;--muted2:#8A96A8;
+        --bd:rgba(255,255,255,.07);--bd2:rgba(255,255,255,.12);
+        --card:rgba(255,255,255,.035);--card2:rgba(255,255,255,.06);
+      }
+      *{letter-spacing:0}
+      body { background:var(--ink); color:var(--cream); font-family:"IBM Plex Sans",sans-serif; }
+      .glass { background: rgba(10,20,32,.9)!important; backdrop-filter: blur(20px); }
+      .scorebar > span { transition: width .8s ease; }
+      .bg-white,.bg-slate-100,.bg-slate-50{background:var(--card)!important}
+      .bg-navy{background:var(--ink)!important}
+      .text-navy,.text-slate-900,.text-slate-800,.text-slate-700{color:var(--cream)!important}
+      .text-slate-600,.text-slate-500,.text-slate-400,.text-slate-300{color:var(--muted2)!important}
+      .border,.border-slate-200,.border-slate-300{border-color:var(--bd2)!important}
+      .shadow-sm,.shadow-lg{box-shadow:none!important}
+      .rounded-xl{border-radius:10px}
+      input,select,textarea{background:rgba(255,255,255,.05)!important;color:var(--cream)!important;border-color:var(--bd2)!important}
+      input::placeholder,textarea::placeholder{color:var(--muted)!important}
+      option{background:var(--ink2);color:var(--cream)}
+      .bg-brand,.bg-gold{background:var(--gold)!important;color:var(--ink)!important}
+      .hover\:bg-blue-700:hover,.hover\:bg-yellow-500:hover{background:var(--gold2)!important;color:var(--ink)!important}
+      .ring-brand\/20{--tw-ring-color:rgba(200,150,58,.25)!important}
+      .border-brand{border-color:var(--gold-bd2)!important}
+      .font-serif{letter-spacing:-.02em}
+      header{border-color:var(--bd)!important}
+      a:hover{color:var(--gold2)}
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      import React, { createContext, useContext, useEffect, useMemo, useState } from "https://esm.sh/react@18.2.0";
+      import { createRoot } from "https://esm.sh/react-dom@18.2.0/client";
+      import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+
+      const SUPABASE_URL = "https://lgbuywbcpnghqaoaqsxb.supabase.co";
+      const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxnYnV5d2JjcG5naHFhb2Fxc3hiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5NDM1OTQsImV4cCI6MjA5NjUxOTU5NH0.o4ksmO3u75axuX8-9ena7OC_CgkCC_y9AzPBA60776Q";
+      const STRIPE_PUBLISHABLE_KEY = "";
+      const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
+
+      const h = React.createElement;
+      const childList = (children) => Array.isArray(children) ? children : [children].filter((x) => x !== undefined && x !== null && x !== false);
+      const AuthContext = createContext(null);
+      const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+
+      const mockCompanies = [
+        { id:"m1", razao_social:"Metalúrgica Souza Ltda", cnpj:"12.345.678/0001-90", segmento:"Indústria", regime:"lucro_real", estado:"SP", situacao_rfb:"ativa", score: 884 },
+        { id:"m2", razao_social:"TechServ B2B Soluções", cnpj:"98.765.432/0001-10", segmento:"Tecnologia", regime:"lucro_presumido", estado:"MG", situacao_rfb:"ativa", score: 742 },
+        { id:"m3", razao_social:"LogPrime Transportes", cnpj:"11.222.333/0001-44", segmento:"Logística", regime:"simples", estado:"RJ", situacao_rfb:"ativa", score: 628 },
+        { id:"m4", razao_social:"Alfa Obras e Serviços", cnpj:"44.555.666/0001-77", segmento:"Construção", regime:"lucro_presumido", estado:"SP", situacao_rfb:"suspensa", score: 418 },
+      ];
+
+      function cleanCnpj(v) { return String(v || "").replace(/\D/g, ""); }
+      function formatCnpj(v) {
+        const d = cleanCnpj(v).slice(0, 14);
+        return d.replace(/^(\d{2})(\d)/, "$1.$2").replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3").replace(/\.(\d{3})(\d)/, ".$1/$2").replace(/(\d{4})(\d)/, "$1-$2");
+      }
+      function validCnpj(value) {
+        const c = cleanCnpj(value);
+        if (c.length !== 14 || /^(\d)\1+$/.test(c)) return false;
+        const calc = (base, weights) => {
+          const n = base.split("").reduce((a, v, i) => a + Number(v) * weights[i], 0);
+          const r = 11 - (n % 11);
+          return r < 2 ? 0 : r;
+        };
+        const d1 = calc(c.slice(0, 12), [5,4,3,2,9,8,7,6,5,4,3,2]);
+        const d2 = calc(c.slice(0, 12) + d1, [6,5,4,3,2,9,8,7,6,5,4,3,2]);
+        return d1 === Number(c[12]) && d2 === Number(c[13]);
+      }
+      function risk(score) {
+        const n = Number(score || 0);
+        if (n >= 800 || n >= 70 && n <= 100) return { label: "Baixo risco", color: "bg-success", text: "text-success", soft: "bg-green-50" };
+        if (n >= 600 || n >= 40 && n <= 69) return { label: "Médio risco", color: "bg-warning", text: "text-warning", soft: "bg-amber-50" };
+        return { label: "Alto risco", color: "bg-danger", text: "text-danger", soft: "bg-red-50" };
+      }
+      function toast(message, type = "ok") {
+        window.dispatchEvent(new CustomEvent("toast", { detail: { message, type } }));
+      }
+      async function lookupCnpj(cnpj) {
+        const d = cleanCnpj(cnpj);
+        if (d.length !== 14) throw new Error("CNPJ incompleto");
+        const res = await fetch(`https://publica.cnpj.ws/cnpj/${d}`);
+        if (!res.ok) throw new Error("Não foi possível consultar o CNPJ agora");
+        return res.json();
+      }
+      async function invokeScore(body) {
+        return supabase.functions.invoke("calculate-score", { body });
+      }
+
+      function AuthProvider({ children }) {
+        const [session, setSession] = useState(null);
+        const [user, setUser] = useState(null);
+        const [profile, setProfile] = useState(null);
+        const [company, setCompany] = useState(null);
+        const [loading, setLoading] = useState(true);
+
+        async function refresh(currentSession = session) {
+          const u = currentSession?.user;
+          setUser(u || null);
+          if (!u) { setProfile(null); setCompany(null); setLoading(false); return; }
+          const { data: prof } = await supabase.from("profiles").select("*").eq("id", u.id).maybeSingle();
+          setProfile(prof || null);
+          const { data: link } = await supabase.from("company_users").select("company_id").eq("user_id", u.id).limit(1).maybeSingle();
+          if (link?.company_id) {
+            const { data: comp } = await supabase.from("companies").select("*").eq("id", link.company_id).maybeSingle();
+            setCompany(comp || null);
+          } else {
+            const { data: comp } = await supabase.from("companies").select("*").eq("user_id", u.id).order("created_at", { ascending:false }).limit(1).maybeSingle();
+            setCompany(comp || null);
+          }
+          setLoading(false);
+        }
+        useEffect(() => {
+          supabase.auth.getSession().then(({ data }) => { setSession(data.session); refresh(data.session); });
+          const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => { setSession(s); refresh(s); });
+          return () => sub.subscription.unsubscribe();
+        }, []);
+        const value = { session, user, profile, company, loading, refresh, signOut: () => supabase.auth.signOut() };
+        return h(AuthContext.Provider, { value }, ...childList(children));
+      }
+      function useAuth() { return useContext(AuthContext); }
+      function useRoute() {
+        const [path, setPath] = useState(location.pathname);
+        useEffect(() => {
+          const onPop = () => setPath(location.pathname);
+          addEventListener("popstate", onPop);
+          return () => removeEventListener("popstate", onPop);
+        }, []);
+        const nav = (to) => { history.pushState({}, "", to); setPath(location.pathname); scrollTo(0,0); };
+        return { path, nav };
+      }
+
+      function Toasts() {
+        const [items, setItems] = useState([]);
+        useEffect(() => {
+          const onToast = (e) => {
+            const id = Date.now();
+            setItems((x) => [...x, { id, ...e.detail }]);
+            setTimeout(() => setItems((x) => x.filter((i) => i.id !== id)), 4200);
+          };
+          addEventListener("toast", onToast);
+          return () => removeEventListener("toast", onToast);
+        }, []);
+        return h("div", { className:"fixed right-4 top-4 z-50 space-y-2" }, items.map((i) =>
+          h("div", { key:i.id, className:`rounded-lg px-4 py-3 shadow-lg text-sm ${i.type === "error" ? "bg-red-600 text-white" : "bg-slate-900 text-white"}` }, i.message)
+        ));
+      }
+      function Link({ to, children, className }) {
+        const route = window.__route;
+        return h("a", { href:to, className, onClick:(e)=>{ e.preventDefault(); route.nav(to); } }, ...childList(children));
+      }
+      function PublicLayout({ children }) {
+        const { session, signOut } = useAuth();
+        return h("div", null,
+          h("header", { className:"sticky top-0 z-40 border-b border-slate-200 glass" },
+            h("div", { className:"mx-auto flex h-16 max-w-7xl items-center justify-between px-4" },
+              h(Link, { to:"/", className:"flex items-center gap-2 font-serif text-2xl font-black text-navy" }, "Crivo", h("span", { className:"text-gold" }, "."), h("span", { className:"rounded border border-gold/40 px-2 py-0.5 font-sans text-[10px] uppercase tracking-widest text-gold" }, "by Adeke")),
+              h("nav", { className:"hidden items-center gap-6 text-sm font-medium md:flex" },
+                h(Link, { to:"/diretorio", className:"hover:text-brand" }, "Diretório"),
+                h(Link, { to:"/planos", className:"hover:text-brand" }, "Planos"),
+                session ? h(Link, { to:"/painel", className:"hover:text-brand" }, "Painel") : h(Link, { to:"/login", className:"hover:text-brand" }, "Entrar"),
+                session && h("button", { onClick:signOut, className:"text-slate-500 hover:text-danger" }, "Sair"),
+                h(Link, { to:"/cadastrar", className:"rounded-lg bg-gold px-4 py-2 font-bold text-navy hover:bg-yellow-500" }, "Começar grátis")
+              )
+            )
+          ),
+          ...childList(children),
+          h(Footer)
+        );
+      }
+      function PrivateLayout({ children }) {
+        const { user, company, signOut } = useAuth();
+        const links = [["/painel","Painel"],["/dashboard","Dashboard"],["/documentos","Documentos"],["/escritorio","Escritório"],["/planos","Planos"]];
+        return h("div", { className:"min-h-screen bg-slate-100 md:flex" },
+          h("aside", { className:"border-r bg-navy p-4 text-white md:min-h-screen md:w-64" },
+            h(Link, { to:"/", className:"mb-8 flex items-center gap-2 font-serif text-2xl font-black" }, "Crivo", h("span", { className:"text-gold" }, ".")),
+            h("nav", { className:"grid gap-2" }, links.map(([to,label]) => h(Link, { key:to, to, className:"rounded-lg px-3 py-2 text-sm hover:bg-white/10" }, label)))
+          ),
+          h("main", { className:"flex-1" },
+            h("div", { className:"flex items-center justify-between border-b bg-white px-5 py-4" },
+              h("div", null, h("p", { className:"text-xs uppercase tracking-widest text-slate-500" }, "Conta"), h("p", { className:"font-semibold" }, company?.razao_social || user?.email || "Crivo")),
+              h("button", { onClick:signOut, className:"inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-slate-50" }, "Sair")
+            ),
+            h("div", { className:"p-5" }, ...childList(children))
+          )
+        );
+      }
+      function Protected({ children }) {
+        const { session, loading } = useAuth();
+        const route = window.__route;
+        useEffect(() => { if (!loading && !session) route.nav("/cadastrar"); }, [loading, session]);
+        if (loading) return h("div", { className:"p-12 text-center text-slate-500" }, "Carregando...");
+        if (!session) return null;
+        return h(React.Fragment, null, ...childList(children));
+      }
+      function Footer() {
+        return h("footer", { className:"border-t bg-navy text-white" },
+          h("div", { className:"mx-auto grid max-w-7xl gap-6 px-4 py-10 md:grid-cols-4" },
+            h("div", null, h("h3", { className:"font-serif text-2xl font-black" }, "Crivo."), h("p", { className:"mt-2 text-sm text-slate-300" }, "KYP e compliance fiscal de fornecedores.")),
+            h("div", null, h("p", { className:"font-semibold" }, "Produto"), h(Link, { to:"/diretorio", className:"mt-2 block text-sm text-slate-300" }, "Diretório"), h(Link, { to:"/planos", className:"mt-2 block text-sm text-slate-300" }, "Planos")),
+            h("div", null, h("p", { className:"font-semibold" }, "Legal"), h("p", { className:"mt-2 text-sm text-slate-300" }, "Termos de Uso"), h("p", { className:"mt-2 text-sm text-slate-300" }, "Privacidade")),
+            h("div", null, h("p", { className:"font-semibold" }, "Contato"), h("p", { className:"mt-2 text-sm text-slate-300" }, "contato@adeke.com.br"), h("p", { className:"mt-2 text-xs text-slate-400" }, "CNPJ placeholder"))
+          )
+        );
+      }
+      function Card({ children, className="" }) { return h("div", { className:`rounded-xl border border-slate-200 bg-white p-5 shadow-sm ${className}` }, ...childList(children)); }
+      function Button({ children, onClick, type="button", disabled=false, variant="primary", className="" }) {
+        const styles = variant === "ghost" ? "border bg-white text-slate-700 hover:bg-slate-50" : variant === "danger" ? "bg-danger text-white" : "bg-brand text-white hover:bg-blue-700";
+        return h("button", { type, disabled, onClick, className:`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-bold disabled:opacity-50 ${styles} ${className}` }, ...childList(children));
+      }
+      function Field({ label, children, error }) { return h("label", { className:"block" }, h("span", { className:"mb-1 block text-sm font-semibold text-slate-700" }, label), ...childList(children), error && h("span", { className:"mt-1 block text-xs text-danger" }, error)); }
+      function Input(props) { return h("input", { ...props, className:`w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-brand ${props.className || ""}` }); }
+      function Select(props) { return h("select", { ...props, className:"w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-brand" }, props.children); }
+
+      function Home() {
+        const [cnpj,setCnpj] = useState("");
+        const [loading,setLoading] = useState(false);
+        async function diagnose(e) {
+          e.preventDefault();
+          if (!validCnpj(cnpj)) return toast("Digite um CNPJ válido.", "error");
+          setLoading(true);
+          await supabase.from("leads").insert({ tipo:"diagnostico", cnpj:cleanCnpj(cnpj), origem:"landing_hero", source:"diagnostico", status:"novo" });
+          await invokeScore({ cnpj:cleanCnpj(cnpj), modo:"preview" }).catch(()=>null);
+          setLoading(false);
+          window.__route.nav(`/diretorio?cnpj=${cleanCnpj(cnpj)}`);
+        }
+        return h(PublicLayout, null,
+          h("section", { className:"bg-navy text-white" },
+            h("div", { className:"mx-auto grid max-w-7xl gap-10 px-4 py-20 md:grid-cols-[1.1fr_.9fr] md:items-center" },
+              h("div", null,
+                h("div", { className:"mb-5 inline-flex rounded-full border border-gold/40 px-3 py-1 text-xs font-bold uppercase tracking-widest text-gold" }, "ReceitaWS · PGFN · Score diário"),
+                h("h1", { className:"font-serif text-5xl font-black leading-tight md:text-7xl" }, "Monitore fornecedores. Evite riscos. Proteja sua empresa."),
+                h("p", { className:"mt-6 max-w-2xl text-lg text-slate-300" }, "Crivo analisa CNPJ, situação fiscal e certidões automaticamente, gerando um score de risco atualizado para cada fornecedor da sua carteira."),
+                h("form", { onSubmit:diagnose, className:"mt-8 flex max-w-xl flex-col gap-3 rounded-2xl bg-white p-2 md:flex-row" },
+                  h(Input, { value:cnpj, onChange:e=>setCnpj(formatCnpj(e.target.value)), placeholder:"00.000.000/0000-00", className:"border-0 text-slate-900" }),
+                  h(Button, { type:"submit", disabled:loading, className:"bg-gold text-navy hover:bg-yellow-500" }, loading ? "Analisando..." : "Diagnosticar agora")
+                ),
+                h("div", { className:"mt-5 flex flex-wrap gap-2 text-xs" }, ["ReceitaWS integrado","Score em tempo real","Alertas automáticos"].map(x=>h("span",{key:x,className:"rounded-full bg-white/10 px-3 py-1"},x)))
+              ),
+              h(Card, { className:"bg-white/10 text-white border-white/10" },
+                h("p", { className:"text-sm text-slate-300" }, "Resumo da carteira"),
+                h("div", { className:"mt-4 grid gap-3" }, [["Fornecedores monitorados","128"],["Alertas críticos","7"],["Score médio","812"]].map(([a,b])=>h("div",{key:a,className:"flex items-center justify-between rounded-lg bg-white/10 p-4"},h("span",null,a),h("strong",{className:"text-2xl text-gold"},b))))
+              )
+            )
+          ),
+          h(HowItWorks), h(PlansSection), h(AccountantLead)
+        );
+      }
+      function HowItWorks() {
+        return h("section", { className:"mx-auto max-w-7xl px-4 py-16" },
+          h("h2", { className:"font-serif text-4xl font-black text-navy" }, "Como funciona"),
+          h("div", { className:"mt-8 grid gap-5 md:grid-cols-3" }, [
+            ["1", "Cadastre os CNPJs", "Monte sua carteira de fornecedores críticos."],
+            ["2", "O Crivo consulta bases públicas", "Receita, certidões e sinais de risco fiscal."],
+            ["3", "Receba alertas", "Mudanças relevantes viram alertas acionáveis."]
+          ].map(([n,t,d])=>h(Card,{key:n},h("div",{className:"mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-brand font-bold text-white"},n),h("h3",{className:"font-bold"},t),h("p",{className:"mt-2 text-sm text-slate-600"},d))))
+        );
+      }
+      function PlansSection() {
+        const { session, user, company } = useAuth();
+        const plans = [
+          ["free","Grátis",0,["3 fornecedores","Score parcial","Diretório público"]],
+          ["pro","Pro",297,["50 fornecedores","Alertas automáticos","Documentos e KYP completo"]],
+          ["premium","Premium",897,["Ilimitado","Relatórios exportáveis","Escritório e white-label"]]
+        ];
+        async function checkout(id) {
+          if (id === "free" || !session) return window.__route.nav(`/cadastrar?plano=${id}`);
+          const { data, error } = await supabase.functions.invoke("create-checkout", {
+            body: {
+              plano: id,
+              email: user?.email,
+              empresa_id: company?.id,
+              user_id: user?.id,
+              success_url: `${location.origin}/painel?checkout=success`,
+              cancel_url: `${location.origin}/planos?checkout=cancelled`,
+            },
+          });
+          if (error || !data?.url) return toast("Stripe ainda não está configurado. Envie as chaves para ativar pagamentos.", "error");
+          location.href = data.url;
+        }
+        return h("section", { className:"bg-white" }, h("div", { className:"mx-auto max-w-7xl px-4 py-16" },
+          h("h2", { className:"font-serif text-4xl font-black text-navy" }, "Planos"),
+          h("div", { className:"mt-8 grid gap-5 md:grid-cols-3" }, plans.map(([id,name,price,items])=>h(Card,{key:id,className:id==="pro"?"border-brand ring-2 ring-brand/20":""},
+            h("h3",{className:"text-xl font-black"},name), h("p",{className:"mt-2 text-3xl font-black"}, price ? money.format(price) : "R$ 0", h("span",{className:"text-sm font-medium text-slate-500"},"/mês")),
+            h("ul",{className:"mt-5 space-y-2"},items.map(i=>h("li",{key:i,className:"flex items-center gap-2 text-sm"},h("span",{className:"font-bold text-success"},"✓"),i))),
+            h("button",{onClick:()=>checkout(id),className:"mt-6 inline-flex w-full justify-center rounded-lg bg-brand px-4 py-2 font-bold text-white"}, price ? `Assinar ${name}` : "Começar grátis")
+          )))
+        ));
+      }
+      function AccountantLead() {
+        return h("section", { className:"mx-auto max-w-7xl px-4 py-16" },
+          h(Card, { className:"grid gap-6 bg-navy text-white md:grid-cols-[1fr_auto] md:items-center" },
+            h("div", null, h("h2",{className:"font-serif text-3xl font-black"},"Para escritórios de contabilidade"), h("p",{className:"mt-2 text-slate-300"},"Gerencie clientes, acompanhe alertas e crie uma nova receita recorrente com compliance fiscal.")),
+            h(Link,{to:"/escritorio",className:"rounded-lg bg-gold px-5 py-3 font-bold text-navy"},"Quero ser parceiro")
+          )
+        );
+      }
+
+      function Directory() {
+        const { session, company } = useAuth();
+        const [term,setTerm] = useState(new URLSearchParams(location.search).get("cnpj") || "");
+        const [results,setResults] = useState(mockCompanies);
+        const [loading,setLoading] = useState(false);
+        async function search(e) {
+          e?.preventDefault();
+          setLoading(true);
+          const q = term.trim();
+          let rows = [];
+          if (cleanCnpj(q).length === 14) {
+            const { data } = await supabase.from("companies").select("*, scores(*)").eq("cnpj", cleanCnpj(q)).limit(1);
+            rows = data || [];
+            if (!rows.length) {
+              const r = await lookupCnpj(q).catch(()=>null);
+              if (r) rows = [{ id:"preview", cnpj:cleanCnpj(q), razao_social:r.razao_social || r.estabelecimento?.nome_fantasia || "Empresa consultada", segmento:r.atividade_principal?.descricao || "Não informado", estado:r.estabelecimento?.estado?.sigla, situacao_rfb:"ativa", score: null, preview:true }];
+            }
+          } else if (q) {
+            const { data } = await supabase.from("companies").select("*, scores(*)").ilike("razao_social", `%${q}%`).limit(20);
+            rows = data || [];
+          } else rows = mockCompanies;
+          setResults(rows.length ? rows.map(normalizeCompany) : []);
+          setLoading(false);
+        }
+        async function addPortfolio(row) {
+          if (!session || !company) return window.__route.nav("/cadastrar");
+          let supplier = row;
+          if (row.preview) {
+            const { data, error } = await supabase.from("companies").insert({ cnpj:cleanCnpj(row.cnpj), razao_social:row.razao_social, tipo:"fornecedor", segmento:row.segmento, estado:row.estado, situacao_rfb:"ativa" }).select().single();
+            if (error) return toast(error.message, "error");
+            supplier = data;
+          }
+          const { error } = await supabase.from("portfolios").insert({ buyer_id:company.id, supplier_id:supplier.id, added_by:session.user.id });
+          if (error) return toast(error.message.includes("duplicate") ? "Este fornecedor já está na sua carteira." : error.message, "error");
+          await invokeScore({ company_id:supplier.id }).catch(()=>null);
+          toast("Fornecedor adicionado à carteira.");
+        }
+        return h(PublicLayout, null, h("main",{className:"mx-auto max-w-7xl px-4 py-12"},
+          h("h1",{className:"font-serif text-5xl font-black text-navy"},"Diretório de fornecedores"),
+          h("p",{className:"mt-3 max-w-2xl text-slate-600"},"Busque por CNPJ ou razão social. Visitantes veem uma prévia; contas logadas acessam KYP completo."),
+          h("form",{onSubmit:search,className:"mt-8 flex gap-3"},h(Input,{value:term,onChange:e=>setTerm(e.target.value),placeholder:"CNPJ ou razão social"}),h(Button,{type:"submit",disabled:loading}, loading?"Buscando...":"Buscar")),
+          h("div",{className:"mt-8 grid gap-5 md:grid-cols-2"},results.map((row,i)=>h(CompanyCard,{key:row.id||i,row,session,onAdd:()=>addPortfolio(row)}))),
+          !session && h("div",{className:"mt-8 rounded-xl border border-gold/40 bg-yellow-50 p-5 text-sm text-slate-700"},"Faça login para ver score completo, explicabilidade e recomendações tributárias.")
+        ));
+      }
+      function normalizeCompany(c) {
+        const latest = Array.isArray(c.scores) ? [...c.scores].sort((a,b)=>Date.parse(b.calculated_at)-Date.parse(a.calculated_at))[0] : null;
+        return { ...c, score: c.score || latest?.total };
+      }
+      function CompanyCard({ row, session, onAdd }) {
+        const score = row.score || (row.situacao_rfb === "ativa" ? 72 : 35);
+        const rr = risk(score);
+        const percent = score > 100 ? score / 10 : score;
+        return h(Card,null,
+          h("div",{className:"flex items-start justify-between gap-4"},h("div",null,h("h3",{className:"font-bold"},row.razao_social),h("p",{className:"mt-1 text-sm text-slate-500"},formatCnpj(row.cnpj))),h("span",{className:`rounded-full px-3 py-1 text-xs font-bold ${rr.soft} ${rr.text}`},session ? Math.round(score) : rr.label)),
+          h("div",{className:"mt-4 scorebar h-2 rounded-full bg-slate-100"},h("span",{className:`block h-2 rounded-full ${rr.color}`,style:{width:`${Math.min(percent,100)}%`}})),
+          h("div",{className:"mt-4 flex flex-wrap gap-2 text-xs text-slate-600"},[row.segmento,row.regime,row.estado,row.situacao_rfb].filter(Boolean).map(x=>h("span",{key:x,className:"rounded-full bg-slate-100 px-2 py-1"},x))),
+          h("div",{className:"mt-5 flex gap-2"},h(Button,{onClick:onAdd},session?"Adicionar à carteira":"Ver análise completa"),h(Link,{to:"/cadastrar",className:"rounded-lg border px-4 py-2 text-sm font-bold"},"Criar conta"))
+        );
+      }
+
+      function Login() {
+        const [email,setEmail]=useState(""); const [password,setPassword]=useState(""); const [loading,setLoading]=useState(false);
+        async function submit(e){ e.preventDefault(); setLoading(true); const { error } = await supabase.auth.signInWithPassword({ email, password }); setLoading(false); if(error) return toast(error.message,"error"); window.__route.nav("/painel"); }
+        async function reset(){ if(!email) return toast("Digite seu e-mail primeiro.","error"); await supabase.auth.resetPasswordForEmail(email); toast("Verifique seu e-mail para redefinir a senha."); }
+        return h(PublicLayout,null,h("main",{className:"mx-auto max-w-md px-4 py-16"},h(Card,null,h("h1",{className:"font-serif text-4xl font-black"},"Entrar"),h("form",{onSubmit:submit,className:"mt-6 space-y-4"},h(Field,{label:"E-mail"},h(Input,{type:"email",value:email,onChange:e=>setEmail(e.target.value),required:true})),h(Field,{label:"Senha"},h(Input,{type:"password",value:password,onChange:e=>setPassword(e.target.value),required:true})),h(Button,{type:"submit",disabled:loading,className:"w-full"},loading?"Entrando...":"Entrar")),h("button",{onClick:reset,className:"mt-4 text-sm text-brand"},"Esqueci minha senha"),h("p",{className:"mt-6 text-sm"},"Ainda não tem conta? ",h(Link,{to:"/cadastrar",className:"font-bold text-brand"},"Cadastre-se")))));
+      }
+      function Register() {
+        const params = new URLSearchParams(location.search);
+        const [step,setStep]=useState(1); const [loading,setLoading]=useState(false); const [form,setForm]=useState({ cnpj:"", razao_social:"", nome_fantasia:"", telefone:"", segmento:"Serviços", nome:"", email:"", password:"", confirm:"", cargo:"CEO/Diretor", plano:params.get("plano")||"free", aceite:false });
+        const update=(k,v)=>setForm(f=>({...f,[k]:v}));
+        async function enrich(){ if(cleanCnpj(form.cnpj).length!==14) return; const d=await lookupCnpj(form.cnpj).catch(()=>null); if(d) setForm(f=>({...f, razao_social:d.razao_social||f.razao_social, nome_fantasia:d.estabelecimento?.nome_fantasia||f.nome_fantasia, segmento:d.atividade_principal?.descricao||f.segmento })); }
+        async function submit(e){
+          e.preventDefault();
+          if(!validCnpj(form.cnpj)) return toast("CNPJ inválido.","error");
+          if(form.password.length<8 || form.password!==form.confirm) return toast("Confira a senha e confirmação.","error");
+          if(!form.aceite) return toast("Aceite os termos para continuar.","error");
+          setLoading(true);
+          const { data: authData, error: authError } = await supabase.auth.signUp({ email:form.email, password:form.password, options:{ data:{ nome:form.nome, cargo:form.cargo, cnpj:cleanCnpj(form.cnpj) }}});
+          if(authError || !authData.user){ setLoading(false); return toast(authError?.message || "Erro ao criar usuário","error"); }
+          await supabase.from("profiles").upsert({ id:authData.user.id, email:form.email, display_name:form.nome, username:form.email.split("@")[0], full_name:form.nome, role:"buyer", plan:form.plano, lgpd_consent_version:"1.0", lgpd_consent_at:new Date().toISOString(), monitoring_consent:true });
+          const { data: comp, error: compError } = await supabase.from("companies").insert({ user_id:authData.user.id, cnpj:cleanCnpj(form.cnpj), razao_social:form.razao_social, nome_fantasia:form.nome_fantasia, telefone:form.telefone, segmento:form.segmento, tipo:"contratante", situacao_rfb:"ativa" }).select().single();
+          if(compError){ setLoading(false); return toast(compError.message,"error"); }
+          await supabase.from("company_users").insert({ company_id:comp.id, user_id:authData.user.id, role:"owner" });
+          await supabase.from("leads").insert({ tipo:"cadastro", source:"cadastro", nome:form.nome, email:form.email, cnpj:cleanCnpj(form.cnpj), plano_interesse:form.plano, origem:"organico", status:"novo" });
+          await supabase.functions.invoke("send-email", { body:{ tipo:"boas-vindas", email:form.email, nome:form.nome }}).catch(()=>null);
+          setLoading(false); toast("Conta criada. Se o e-mail de confirmação estiver ativo, confirme sua caixa de entrada."); window.__route.nav("/painel");
+        }
+        const steps = ["Empresa","Usuário","Plano"];
+        return h(PublicLayout,null,h("main",{className:"mx-auto max-w-3xl px-4 py-12"},h(Card,null,h("h1",{className:"font-serif text-4xl font-black"},"Criar conta Crivo"),h("div",{className:"mt-6 flex gap-2"},steps.map((s,i)=>h("div",{key:s,className:`h-2 flex-1 rounded-full ${step>i?"bg-brand":"bg-slate-200"}`}))),h("form",{onSubmit:submit,className:"mt-8 space-y-5"},
+          step===1 && h("div",{className:"grid gap-4 md:grid-cols-2"},h(Field,{label:"CNPJ"},h(Input,{value:form.cnpj,onBlur:enrich,onChange:e=>update("cnpj",formatCnpj(e.target.value)),required:true})),h(Field,{label:"Razão Social"},h(Input,{value:form.razao_social,onChange:e=>update("razao_social",e.target.value),required:true})),h(Field,{label:"Nome Fantasia"},h(Input,{value:form.nome_fantasia,onChange:e=>update("nome_fantasia",e.target.value)})),h(Field,{label:"Telefone"},h(Input,{value:form.telefone,onChange:e=>update("telefone",e.target.value)})),h(Field,{label:"Segmento"},h(Select,{value:form.segmento,onChange:e=>update("segmento",e.target.value)},["Varejo","Indústria","Serviços","Agronegócio","Saúde","Tecnologia","Outro"].map(x=>h("option",{key:x},x))))),
+          step===2 && h("div",{className:"grid gap-4 md:grid-cols-2"},h(Field,{label:"Nome completo"},h(Input,{value:form.nome,onChange:e=>update("nome",e.target.value),required:true})),h(Field,{label:"E-mail corporativo"},h(Input,{type:"email",value:form.email,onChange:e=>update("email",e.target.value),required:true})),h(Field,{label:"Senha"},h(Input,{type:"password",value:form.password,onChange:e=>update("password",e.target.value),required:true})),h(Field,{label:"Confirmar senha"},h(Input,{type:"password",value:form.confirm,onChange:e=>update("confirm",e.target.value),required:true})),h(Field,{label:"Cargo"},h(Select,{value:form.cargo,onChange:e=>update("cargo",e.target.value)},["CEO/Diretor","Gerente","Controller","Contador","Outro"].map(x=>h("option",{key:x},x))))),
+          step===3 && h("div",null,h("div",{className:"grid gap-4 md:grid-cols-3"},[["free","Grátis","R$ 0"],["pro","Pro","R$ 297/mês"],["premium","Premium","R$ 897/mês"]].map(([id,n,p])=>h("button",{type:"button",key:id,onClick:()=>update("plano",id),className:`rounded-xl border p-4 text-left ${form.plano===id?"border-brand ring-2 ring-brand/20":"border-slate-200"}`},h("strong",null,n),h("p",{className:"mt-1 text-sm text-slate-500"},p)))),h("label",{className:"mt-5 flex items-center gap-2 text-sm"},h("input",{type:"checkbox",checked:form.aceite,onChange:e=>update("aceite",e.target.checked)}),"Li e aceito os Termos de Uso e a Política de Privacidade")),
+          h("div",{className:"flex justify-between pt-4"},h(Button,{variant:"ghost",onClick:()=> step>1 ? setStep(step-1) : window.__route.nav("/")},step>1?"Voltar":"Cancelar"), step<3 ? h(Button,{onClick:()=>setStep(step+1)},"Próximo") : h(Button,{type:"submit",disabled:loading},loading?"Criando...":"Criar conta"))
+        ))));
+      }
+      function Planos() { return h(PublicLayout,null,h(PlansSection),h(ProposalForm)); }
+      function ProposalForm() {
+        const [f,setF]=useState({nome:"",email:"",empresa:"",cnpj:"",telefone:"",plano:"pro",mensagem:""}); const [loading,setLoading]=useState(false); const u=(k,v)=>setF(x=>({...x,[k]:v}));
+        async function submit(e){ e.preventDefault(); setLoading(true); const { error }=await supabase.from("leads").insert({ tipo:"proposta", source:"proposta", nome:f.nome,email:f.email,empresa:f.empresa,cnpj:cleanCnpj(f.cnpj),telefone:f.telefone,plano_interesse:f.plano,mensagem:f.mensagem,status:"novo" }); await supabase.functions.invoke("send-email",{body:{tipo:"proposta-recebida",email:f.email,nome:f.nome,plano:f.plano}}).catch(()=>null); setLoading(false); if(error) return toast(error.message,"error"); toast("Proposta recebida. Entraremos em contato."); }
+        return h("section",{className:"mx-auto max-w-3xl px-4 py-12"},h(Card,null,h("h2",{className:"font-serif text-3xl font-black"},"Falar com comercial"),h("form",{onSubmit:submit,className:"mt-6 grid gap-4 md:grid-cols-2"},["nome","email","empresa","cnpj","telefone"].map(k=>h(Field,{key:k,label:k.toUpperCase()},h(Input,{type:k==="email"?"email":"text",value:f[k],onChange:e=>u(k,k==="cnpj"?formatCnpj(e.target.value):e.target.value),required:k!=="telefone"}))),h(Field,{label:"Plano"},h(Select,{value:f.plano,onChange:e=>u("plano",e.target.value)},["pro","premium"].map(x=>h("option",{key:x},x)))),h("textarea",{className:"md:col-span-2 rounded-lg border p-3",placeholder:"Mensagem",value:f.mensagem,onChange:e=>u("mensagem",e.target.value)}),h(Button,{type:"submit",disabled:loading,className:"md:col-span-2"},loading?"Enviando...":"Enviar proposta"))));
+      }
+      function Painel() {
+        const { company, refresh } = useAuth();
+        useEffect(()=>{ const p=new URLSearchParams(location.search); if(p.get("checkout")==="success"){ toast("Assinatura ativada com sucesso."); history.replaceState({}, "", "/painel"); refresh(); }},[]);
+        return h(PrivateLayout,null,h("div",{className:"grid gap-5 md:grid-cols-4"},[["Plano",company?.plan||company?.plano||"free"],["Fornecedores","Carteira"],["Alertas","Tempo real"],["Último monitoramento","Sob demanda"]].map(([a,b])=>h(Card,{key:a},h("p",{className:"text-sm text-slate-500"},a),h("p",{className:"mt-2 text-2xl font-black"},b)))),h("div",{className:"mt-6 grid gap-5 md:grid-cols-2"},h(Card,null,h("h2",{className:"font-bold"},"Próximos passos"),h("p",{className:"mt-2 text-sm text-slate-600"},"Adicione fornecedores no Dashboard, envie documentos e acompanhe alertas."),h(Link,{to:"/dashboard",className:"mt-4 inline-flex rounded-lg bg-brand px-4 py-2 font-bold text-white"},"Ir para Dashboard")),h(Card,null,h("h2",{className:"font-bold"},"Status do backend"),h("p",{className:"mt-2 text-sm text-slate-600"},"Supabase e Edge Functions conectados."))));
+      }
+      function Dashboard() {
+        const { company } = useAuth(); const [items,setItems]=useState([]); const [alerts,setAlerts]=useState([]); const [cnpj,setCnpj]=useState(""); const [nome,setNome]=useState(""); const [loading,setLoading]=useState(false);
+        async function load(){ if(!company) return; const { data: ports } = await supabase.from("portfolios").select("*, supplier:companies!portfolios_supplier_id_fkey(*, scores(*))").eq("buyer_id",company.id); setItems((ports||[]).map(p=>({portfolio:p,...normalizeCompany(p.supplier||{})}))); const { data: al }=await supabase.from("alerts").select("*").order("created_at",{ascending:false}).limit(10); setAlerts(al||[]); }
+        useEffect(()=>{load()},[company?.id]);
+        async function add(e){ e.preventDefault(); if(!company) return; if(!validCnpj(cnpj)) return toast("CNPJ inválido","error"); setLoading(true); let supplier=null; const { data: existing }=await supabase.from("companies").select("*").eq("cnpj",cleanCnpj(cnpj)).maybeSingle(); supplier=existing; if(!supplier){ const r=await lookupCnpj(cnpj).catch(()=>null); const { data }=await supabase.from("companies").insert({cnpj:cleanCnpj(cnpj),razao_social:nome||r?.razao_social||"Fornecedor",nome_fantasia:r?.estabelecimento?.nome_fantasia,tipo:"fornecedor",segmento:r?.atividade_principal?.descricao,estado:r?.estabelecimento?.estado?.sigla,situacao_rfb:"ativa"}).select().single(); supplier=data; } const { error }=await supabase.from("portfolios").insert({buyer_id:company.id,supplier_id:supplier.id,status:"active"}); await invokeScore({company_id:supplier.id}).catch(()=>null); setLoading(false); if(error) return toast(error.message.includes("duplicate")?"Fornecedor já está na carteira.":error.message,"error"); setCnpj(""); setNome(""); toast("Fornecedor adicionado."); load(); }
+        const high = items.filter(i=>Number(i.score||0)<600).length;
+        return h(PrivateLayout,null,h("div",{className:"grid gap-5 md:grid-cols-4"},[["Monitorados",items.length],["Alto risco",high],["Alertas",alerts.length],["Atualização","Agora"]].map(([a,b])=>h(Card,{key:a},h("p",{className:"text-sm text-slate-500"},a),h("p",{className:"mt-2 text-2xl font-black"},b)))),h(Card,{className:"mt-6"},h("h2",{className:"font-bold"},"Adicionar fornecedor"),h("form",{onSubmit:add,className:"mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto]"},h(Input,{value:cnpj,onChange:e=>setCnpj(formatCnpj(e.target.value)),placeholder:"CNPJ"}),h(Input,{value:nome,onChange:e=>setNome(e.target.value),placeholder:"Nome opcional"}),h(Button,{type:"submit",disabled:loading},loading?"Adicionando...":"Adicionar"))),h(Card,{className:"mt-6 overflow-x-auto"},h("h2",{className:"font-bold"},"Carteira de fornecedores"),h("table",{className:"mt-4 w-full text-left text-sm"},h("thead",null,h("tr",{className:"border-b"},["CNPJ","Razão Social","Segmento","Score","Status"].map(x=>h("th",{key:x,className:"py-2"},x)))),h("tbody",null,items.map(i=>{const rr=risk(i.score); return h("tr",{key:i.id,className:"border-b"},h("td",{className:"py-3"},formatCnpj(i.cnpj)),h("td",null,i.razao_social),h("td",null,i.segmento||"-"),h("td",null,h("span",{className:`rounded-full px-2 py-1 text-xs font-bold ${rr.soft} ${rr.text}`},Math.round(i.score||0))),h("td",null,i.situacao_rfb||"ativa"));})))),h(Card,{className:"mt-6"},h("h2",{className:"font-bold"},"Alertas recentes"),alerts.length?alerts.map(a=>h("div",{key:a.id,className:"mt-3 rounded-lg bg-slate-50 p-3 text-sm"},h("strong",null,a.title),h("p",{className:"text-slate-600"},a.description))):h("p",{className:"mt-2 text-sm text-slate-500"},"Nenhum alerta ainda.")));
+      }
+      function Documents() {
+        const { company }=useAuth(); const [docs,setDocs]=useState([]); const [file,setFile]=useState(null); const [tipo,setTipo]=useState("certidao_federal"); const [valid,setValid]=useState(""); const [loading,setLoading]=useState(false);
+        async function load(){ if(!company) return; const { data }=await supabase.from("documents").select("*").eq("company_id",company.id).order("created_at",{ascending:false}); setDocs(data||[]); }
+        useEffect(()=>{load()},[company?.id]);
+        async function upload(e){ e.preventDefault(); if(!file) return; setLoading(true); const path=`${company.id}/${tipo}/${Date.now()}_${file.name}`; const up=await supabase.storage.from("documents").upload(path,file,{upsert:true}); if(up.error){setLoading(false);return toast(up.error.message,"error");} const { data:{ publicUrl } }=supabase.storage.from("documents").getPublicUrl(path); const { error }=await supabase.from("documents").insert({company_id:company.id,tipo,filename:file.name,storage_path:path,url:publicUrl,tamanho:file.size,valid_until:valid||null,validade:valid||null,status:"valid",lgpd_consent:true,lgpd_consent_at:new Date().toISOString()}); await invokeScore({company_id:company.id}).catch(()=>null); setLoading(false); if(error) return toast(error.message,"error"); toast("Documento enviado."); load(); }
+        return h(PrivateLayout,null,h(Card,null,h("h1",{className:"font-serif text-4xl font-black"},"Documentos"),h("form",{onSubmit:upload,className:"mt-6 grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]"},h("input",{type:"file",onChange:e=>setFile(e.target.files[0]),className:"rounded-lg border p-2"}),h(Select,{value:tipo,onChange:e=>setTipo(e.target.value)},["certidao_federal","certidao_estadual","certidao_municipal","fgts","inss","contrato_social","outros"].map(x=>h("option",{key:x,value:x},x))),h(Input,{type:"date",value:valid,onChange:e=>setValid(e.target.value)}),h(Button,{type:"submit",disabled:loading},loading?"Enviando...":"Upload"))),h(Card,{className:"mt-6"},h("h2",{className:"font-bold"},"Arquivos"),docs.length?docs.map(d=>h("div",{key:d.id,className:"mt-3 flex items-center justify-between rounded-lg border p-3 text-sm"},h("span",null,d.filename),h("span",{className:"text-slate-500"},d.valid_until||"Sem validade"))):h("p",{className:"mt-2 text-sm text-slate-500"},"Nenhum documento enviado.")));
+      }
+      function Escritorio() {
+        const [f,setF]=useState({nome:"",email:"",crc:"",escritorio:"",qtd:"",telefone:"",canal:""}); const [loading,setLoading]=useState(false); const u=(k,v)=>setF(x=>({...x,[k]:v}));
+        async function submit(e){ e.preventDefault(); setLoading(true); const {error}=await supabase.from("leads").insert({tipo:"parceiro_contador",source:"parceiro",nome:f.nome,email:f.email,crc:f.crc,escritorio:f.escritorio,qtd_clientes_pj:Number(f.qtd)||0,telefone:f.telefone,canal_aquisicao:f.canal,status:"novo"}); await supabase.functions.invoke("send-email",{body:{tipo:"parceiro-contador-recebido",email:f.email,nome:f.nome,escritorio:f.escritorio}}).catch(()=>null); setLoading(false); if(error) return toast(error.message,"error"); toast("Solicitação de parceiro enviada."); }
+        return h(PublicLayout,null,h("main",{className:"mx-auto grid max-w-7xl gap-8 px-4 py-12 md:grid-cols-[1fr_.9fr]"},h("div",null,h("h1",{className:"font-serif text-5xl font-black text-navy"},"Dashboard para escritórios"),h("p",{className:"mt-4 text-slate-600"},"Gerencie clientes, fornecedores em risco, alertas críticos e comissões recorrentes."),h("div",{className:"mt-8 grid gap-4 md:grid-cols-2"},["Clientes ativos","Alertas por cliente","Comissões","White-label"].map(x=>h(Card,{key:x},h("strong",null,x),h("p",{className:"mt-2 text-sm text-slate-500"},"Disponível para contas Pro/Premium."))))),h(Card,null,h("h2",{className:"font-serif text-3xl font-black"},"Quero ser parceiro"),h("form",{onSubmit:submit,className:"mt-5 space-y-3"},[["nome","Nome do contador"],["email","E-mail"],["crc","CRC"],["escritorio","Escritório"],["qtd","Quantidade de clientes PJ"],["telefone","Telefone"],["canal","Como conheceu o Crivo"]].map(([k,l])=>h(Field,{key:k,label:l},h(Input,{type:k==="email"?"email":"text",value:f[k],onChange:e=>u(k,e.target.value),required:k!=="telefone"&&k!=="canal"}))),h(Button,{type:"submit",disabled:loading,className:"w-full"},loading?"Enviando...":"Enviar")))));
+      }
+      function AuthCallback(){ useEffect(()=>{ supabase.auth.exchangeCodeForSession(location.href).finally(()=>window.__route.nav("/painel")); },[]); return h("div",{className:"p-12 text-center"},"Confirmando login..."); }
+      function App() {
+        const route = useRoute(); window.__route = route;
+        const path = route.path;
+        let Page = Home;
+        if (path==="/diretorio") Page=Directory;
+        if (path==="/planos") Page=Planos;
+        if (path==="/cadastrar") Page=Register;
+        if (path==="/login") Page=Login;
+        if (path==="/auth/callback") Page=AuthCallback;
+        const privateMap = { "/painel":Painel, "/dashboard":Dashboard, "/documentos":Documents };
+        if (privateMap[path]) return h(AuthProvider,null,h(Toasts),h(Protected,null,h(privateMap[path])));
+        if (path==="/escritorio") return h(AuthProvider,null,h(Toasts),h(Escritorio));
+        return h(AuthProvider,null,h(Toasts),h(Page));
+      }
+
+      createRoot(document.getElementById("root")).render(h(App));
+    </script>
+  </body>
+</html>
