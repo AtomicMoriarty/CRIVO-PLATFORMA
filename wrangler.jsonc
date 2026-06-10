@@ -1,0 +1,8 @@
+{
+  "name": "crivo",
+  "compatibility_date": "2026-01-01",
+  "assets": {
+    "directory": "./app",
+    "not_found_handling": "single-page-application"
+  }
+}

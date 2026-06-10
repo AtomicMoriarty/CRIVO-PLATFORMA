@@ -90,8 +90,8 @@
         if (c.length !== 14 || /^(\d)\1+$/.test(c)) return false;
         const calc = (base, weights) => {
           const n = base.split("").reduce((a, v, i) => a + Number(v) * weights[i], 0);
-          const r = 11 - (n % 11);
-          return r < 2 ? 0 : r;
+          const x = n % 11;
+          return x < 2 ? 0 : 11 - x;
         };
         const d1 = calc(c.slice(0, 12), [5,4,3,2,9,8,7,6,5,4,3,2]);
         const d2 = calc(c.slice(0, 12) + d1, [6,5,4,3,2,9,8,7,6,5,4,3,2]);
@@ -240,7 +240,11 @@
           const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => { setSession(s); refresh(s); });
           return () => sub.subscription.unsubscribe();
         }, []);
-        const value = { session, user, profile, company, loading, refresh, signOut: () => supabase.auth.signOut() };
+        const value = { session, user, profile, company, loading, refresh, signOut: async () => {
+          await supabase.auth.signOut();
+          toast("Você saiu da sua conta.");
+          window.__route.nav("/");
+        } };
         return h(AuthContext.Provider, { value }, ...childList(children));
       }
       function useAuth() { return useContext(AuthContext); }
@@ -270,7 +274,8 @@
         return h("div", { className:"fixed right-4 top-4 z-[60] space-y-2", role:"status", "aria-live":"polite" }, items.map((i) =>
           h("div", { key:i.id, className:`fade-in flex items-start gap-2 rounded-lg px-4 py-3 shadow-lg text-sm max-w-sm ${i.type === "error" ? "bg-red-600 text-white" : "bg-emerald-700 text-white"}` },
             h("span", { className:"font-bold" }, i.type === "error" ? "✕" : "✓"),
-            h("span", null, i.message))
+            h("span", { className:"flex-1" }, i.message),
+            h("button", { onClick:()=>setItems((x)=>x.filter((t)=>t.id!==i.id)), "aria-label":"Fechar aviso", className:"ml-1 shrink-0 font-bold opacity-60 hover:opacity-100" }, "✕"))
         ));
       }
       function Link({ to, children, className, onClick }) {
@@ -405,8 +410,9 @@
         const navLinks = [
           ["/diretorio", "Diretório"],
           ["/planos", "Planos"],
-          session ? ["/painel", "Painel"] : ["/login", "Entrar"],
+          session ? ["/dashboard", "Carteira"] : ["/login", "Entrar"],
         ];
+        const cta = session ? ["/painel", "Meu Painel"] : ["/cadastrar", "Começar grátis"];
         return h("div", null,
           h("header", { className:"sticky top-0 z-40 border-b border-slate-200 glass" },
             h("div", { className:"mx-auto flex h-16 max-w-7xl items-center justify-between px-4" },
@@ -414,12 +420,12 @@
               h("nav", { className:"hidden items-center gap-6 text-sm font-medium md:flex" },
                 ...navLinks.map(([to, label]) => h(Link, { key:to, to, className:"hover:text-brand" }, label)),
                 session && h("button", { onClick:signOut, className:"text-slate-500 hover:text-danger" }, "Sair"),
-                h(Link, { to:"/cadastrar", className:"rounded-lg bg-gold px-4 py-2 font-bold text-navy hover:bg-yellow-500" }, "Começar grátis")),
+                h(Link, { to:cta[0], className:"rounded-lg bg-gold px-4 py-2 font-bold text-navy hover:bg-yellow-500" }, cta[1])),
               h("button", { className:"rounded-lg border px-3 py-2 text-sm md:hidden", "aria-label":"Abrir menu", onClick:()=>setMenu(!menu) }, menu ? "✕" : "☰")),
             menu && h("nav", { className:"fade-in border-t border-slate-200 glass px-4 py-3 md:hidden" },
               ...navLinks.map(([to, label]) => h(Link, { key:to, to, onClick:()=>setMenu(false), className:"block rounded-lg px-3 py-2 text-sm font-medium hover:bg-white/10" }, label)),
               session && h("button", { onClick:()=>{ setMenu(false); signOut(); }, className:"block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-500" }, "Sair"),
-              h(Link, { to:"/cadastrar", onClick:()=>setMenu(false), className:"mt-2 block rounded-lg bg-gold px-3 py-2 text-center font-bold text-navy" }, "Começar grátis"))),
+              h(Link, { to:cta[0], onClick:()=>setMenu(false), className:"mt-2 block rounded-lg bg-gold px-3 py-2 text-center font-bold text-navy" }, cta[1]))),
           ...childList(children),
           h(Footer));
       }
@@ -434,7 +440,7 @@
               h(Link, { key:to, to, className:`rounded-lg px-3 py-2 text-sm hover:bg-white/10 ${path === to ? "bg-white/10 font-bold text-gold" : ""}` }, label)))),
           h("main", { className:"flex-1" },
             h("div", { className:"flex items-center justify-between border-b bg-white px-5 py-4" },
-              h("div", null, h("p", { className:"text-xs uppercase tracking-widest text-slate-500" }, "Conta"), h("p", { className:"font-semibold" }, company?.razao_social || user?.email || "Crivo")),
+              h("div", { className:"min-w-0" }, h("p", { className:"text-xs uppercase tracking-widest text-slate-500" }, "Conta"), h("p", { className:"max-w-[180px] truncate font-semibold md:max-w-sm" }, company?.razao_social || user?.email || "Crivo")),
               h("button", { onClick:signOut, className:"inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-slate-50" }, "Sair")),
             h("div", { className:"p-5" }, ...childList(children))));
       }
@@ -594,6 +600,7 @@
         }, []);
 
         async function addPortfolio(row) {
+          if (row.exemplo) return toast("Esta é uma empresa de exemplo. Busque um CNPJ real para adicionar à carteira.", "error");
           if (!session || !company) return window.__route.nav("/cadastrar");
           let supplier = row;
           if (!row.id || row.preview) {
@@ -670,7 +677,7 @@
             h(Field,{label:"E-mail"},h(Input,{type:"email",value:email,onChange:e=>setEmail(e.target.value),required:true,autoComplete:"email"})),
             h(Field,{label:"Senha"},h(Input,{type:"password",value:password,onChange:e=>setPassword(e.target.value),required:true,autoComplete:"current-password"})),
             h(Button,{type:"submit",disabled:loading,className:"w-full"},loading?"Entrando...":"Entrar")),
-          h("button",{onClick:reset,className:"mt-4 text-sm text-brand"},"Esqueci minha senha"),
+          h("button",{type:"button",onClick:reset,className:"mt-4 text-sm text-brand"},"Esqueci minha senha"),
           h("p",{className:"mt-6 text-sm"},"Ainda não tem conta? ",h(Link,{to:"/cadastrar",className:"font-bold text-brand"},"Cadastre-se")))));
       }
       function Register() {
@@ -738,6 +745,7 @@
         }
         return h(PublicLayout,null,h("main",{className:"mx-auto max-w-3xl px-4 py-12"},h(Card,null,
           h("h1",{className:"font-serif text-4xl font-black"},"Criar conta Crivo"),
+          h("p",{className:"mt-2 text-sm text-slate-500"},`Passo ${step} de 3 — ${["Dados da empresa","Dados do responsável","Plano e termos"][step-1]}`),
           h("div",{className:"mt-6 flex gap-2"},steps.map((s,i)=>h("div",{key:s,className:"flex-1"},
             h("div",{className:`h-2 rounded-full ${step>i?"bg-brand":"bg-slate-200"}`}),
             h("p",{className:`mt-1 text-center text-[10px] uppercase tracking-wider ${step===i+1?"font-bold text-gold":"text-slate-400"}`},s)))),
@@ -765,7 +773,11 @@
       }
 
       // ---------- Planos / Proposta ----------
-      function Planos() { return h(PublicLayout,null,h(PlansSection),h(ProposalForm)); }
+      function Planos() {
+        const { session } = useAuth();
+        const Layout = session ? PrivateLayout : PublicLayout;
+        return h(Layout,null,h(PlansSection),h(ProposalForm));
+      }
       function ProposalForm() {
         const [f,setF]=useState({nome:"",email:"",empresa:"",cnpj:"",telefone:"",plano:"pro",mensagem:""});
         const [loading,setLoading]=useState(false);
@@ -999,11 +1011,11 @@
             h("p",{className:"mt-2 text-sm text-slate-500"},"A documentação enviada compõe a dimensão \"Documentação Fiscal\" do Score Crivo. Formatos aceitos: PDF, XML, JPG, PNG (até 10MB)."),
             requiredMissing.length>0 && h("div",{className:"mt-4 rounded-lg border border-warning/40 bg-amber-50 p-3 text-sm text-slate-700"},
               h("strong",null,"Para elevar o score, envie: "),requiredMissing.join(", ")),
-            h("form",{onSubmit:upload,className:"mt-6 grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]"},
-              h("input",{type:"file",accept:ACCEPTED.join(","),onChange:pickFile,className:"rounded-lg border p-2","aria-label":"Selecionar arquivo"}),
-              h(Select,{value:tipo,onChange:e=>setTipo(e.target.value),"aria-label":"Tipo de documento"},Object.entries(DOC_META).map(([k,m])=>h("option",{key:k,value:k},m.label))),
-              h(Input,{type:"date",value:valid,onChange:e=>setValid(e.target.value),"aria-label":"Validade do documento"}),
-              h(Button,{type:"submit",disabled:loading},loading?"Enviando...":"Enviar"))),
+            h("form",{onSubmit:upload,className:"mt-6 grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end"},
+              h(Field,{label:"Arquivo"},h("input",{type:"file",accept:ACCEPTED.join(","),onChange:pickFile,className:"w-full rounded-lg border p-2"})),
+              h(Field,{label:"Tipo de documento"},h(Select,{value:tipo,onChange:e=>setTipo(e.target.value)},Object.entries(DOC_META).map(([k,m])=>h("option",{key:k,value:k},m.label)))),
+              h(Field,{label:"Validade do documento",hint:DOC_META[tipo]?.hasExpiry?"Obrigatória para certidões.":"Opcional para este tipo."},h(Input,{type:"date",value:valid,onChange:e=>setValid(e.target.value)})),
+              h(Button,{type:"submit",disabled:loading,className:"md:mb-6"},loading?"Enviando...":"Enviar"))),
           h(Card,{className:"mt-6"},
             h("h2",{className:"font-bold"},"Arquivos enviados"),
             docs.length
@@ -1036,7 +1048,9 @@
           if(error) return toast(translateError(error.message),"error");
           setSent(true);
         }
-        return h(PublicLayout,null,h("main",{className:"mx-auto grid max-w-7xl gap-8 px-4 py-12 md:grid-cols-[1fr_.9fr]"},
+        const { session } = useAuth();
+        const Layout = session ? PrivateLayout : PublicLayout;
+        return h(Layout,null,h("main",{className:"mx-auto grid max-w-7xl gap-8 px-4 py-12 md:grid-cols-[1fr_.9fr]"},
           h("div",null,
             h("h1",{className:"font-serif text-5xl font-black text-navy"},"Dashboard para escritórios"),
             h("p",{className:"mt-4 text-slate-600"},"Gerencie clientes, fornecedores em risco, alertas críticos e comissões recorrentes de 20% sobre cada cliente indicado."),
