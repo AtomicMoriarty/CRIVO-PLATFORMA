@@ -580,16 +580,6 @@
 
       // ---------- Páginas públicas ----------
       function Home() {
-        const [cnpj,setCnpj] = useState("");
-        const [loading,setLoading] = useState(false);
-        async function diagnose(e) {
-          e.preventDefault();
-          if (!validCnpj(cnpj)) return toast("Digite um CNPJ válido.", "error");
-          setLoading(true);
-          await supabase.from("leads").insert({ tipo:"diagnostico", cnpj:cleanCnpj(cnpj), origem:"landing_hero", source:"diagnostico", status:"novo" }).then(()=>null).catch(()=>null);
-          setLoading(false);
-          window.__route.nav(`/diretorio?cnpj=${cleanCnpj(cnpj)}`);
-        }
         return h(PublicLayout, null,
           h("section", { className:"hero-bg bg-navy text-white" },
             h("div", { className:"mx-auto max-w-4xl px-4 pb-12 pt-20 text-center" },
@@ -602,13 +592,7 @@
                 h(Link, { to:"/cadastrar", className:"rounded-md bg-gold px-7 py-3 text-sm font-semibold text-navy hover:bg-yellow-500" }, "Começar grátis"),
                 h(Link, { to:"/diretorio", className:"rounded-md border border-white/15 px-7 py-3 text-sm text-slate-200 hover:border-gold/50 hover:text-gold" }, "Ver o diretório"))),
             h("div", { className:"mx-auto max-w-4xl px-4 pb-14" },
-              h("div", { className:"gold-panel rounded-xl border p-7" },
-                h("p", { className:"mono-label text-gold" }, "★ Gratuito · sem compromisso"),
-                h("h2", { className:"mt-2 font-serif text-xl font-bold" }, "Diagnóstico instantâneo de um fornecedor"),
-                h("p", { className:"mt-1 max-w-lg text-sm text-slate-400" }, "Digite o CNPJ e veja a situação na Receita Federal com o Score Crivo preliminar."),
-                h("form", { onSubmit:diagnose, className:"mt-5 flex flex-col gap-2 md:flex-row" },
-                  h(Input, { value:cnpj, onChange:e=>setCnpj(formatCnpj(e.target.value)), placeholder:"00.000.000/0000-00", inputMode:"numeric", "aria-label":"CNPJ do fornecedor" }),
-                  h(Button, { type:"submit", disabled:loading, className:"md:w-64" }, loading ? "Analisando..." : "Diagnosticar agora →")))),
+              h(DiagnosticoLead)),
             h("div", { className:"mx-auto grid max-w-4xl grid-cols-2 gap-2.5 px-4 pb-20 md:grid-cols-4" },
               [["2026","Ano de teste da Reforma. Janela de 12–24 meses para agir."],
                ["~28%","de crédito CBS/IBS em jogo a cada fornecedor contratado."],
@@ -617,7 +601,7 @@
                 h("div", { key:n, className:"card-lift rounded-lg border border-white/10 bg-white/[.03] p-4 text-center" },
                   h("p", { className:"font-serif text-2xl font-bold", style:{ color:"var(--gold2)" } }, n),
                   h("p", { className:"mt-1.5 text-[11px] leading-snug text-slate-400" }, t))))),
-          h(HowItWorks), h(CreditCompare), h(DiagnosticoLead), h(PlansSection), h(AccountantLead));
+          h(HowItWorks), h(CreditCompare), h(PlansSection), h(AccountantLead));
       }
       function DiagnosticoLead() {
         const [f,setF]=useState({nome:"",email:"",empresa:""});
@@ -636,9 +620,7 @@
           if(error) return toast(translateError(error.message),"error");
           setSent(true);
         }
-        return h("section",{className:"mx-auto max-w-4xl px-4 py-16"},
-          h(Reveal,null,
-            h("div",{className:"gold-panel rounded-xl border p-7"},
+        return h("div",{className:"gold-panel rounded-xl border p-7"},
               sent
                 ? h("div",{className:"fade-in py-4 text-center"},
                     h("div",{className:"mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-success text-xl font-black text-white"},"✓"),
@@ -654,7 +636,7 @@
                       h(Input,{type:"email",value:f.email,onChange:e=>u("email",e.target.value),placeholder:"E-mail *","aria-label":"E-mail"}),
                       h(Input,{value:f.empresa,onChange:e=>u("empresa",e.target.value),placeholder:"Empresa *","aria-label":"Empresa"}),
                       h(Button,{type:"submit",disabled:loading},loading?"Enviando...":"Quero meu diagnóstico →")),
-                    h("p",{className:"mono-label mt-4 text-slate-500"},"Porto & Pacca Advogados · Adeke Adequação Corporativa · Retorno em até 2 dias úteis")))));
+                    h("p",{className:"mono-label mt-4 text-slate-500"},"Porto & Pacca Advogados · Adeke Adequação Corporativa · Retorno em até 2 dias úteis")));
       }
       function CreditCompare() {
         return h("section", { className:"bg-white" }, h("div", { className:"mx-auto max-w-7xl px-4 py-16" },
