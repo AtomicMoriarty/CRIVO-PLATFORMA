@@ -617,7 +617,44 @@
                 h("div", { key:n, className:"card-lift rounded-lg border border-white/10 bg-white/[.03] p-4 text-center" },
                   h("p", { className:"font-serif text-2xl font-bold", style:{ color:"var(--gold2)" } }, n),
                   h("p", { className:"mt-1.5 text-[11px] leading-snug text-slate-400" }, t))))),
-          h(HowItWorks), h(CreditCompare), h(PlansSection), h(AccountantLead));
+          h(HowItWorks), h(CreditCompare), h(DiagnosticoLead), h(PlansSection), h(AccountantLead));
+      }
+      function DiagnosticoLead() {
+        const [f,setF]=useState({nome:"",email:"",empresa:""});
+        const [loading,setLoading]=useState(false);
+        const [sent,setSent]=useState(false);
+        const u=(k,v)=>setF(x=>({...x,[k]:v}));
+        async function submit(e){
+          e.preventDefault();
+          if(!f.nome.trim()) return toast("Preencha seu nome.","error");
+          if(!/^\S+@\S+\.\S+$/.test(f.email)) return toast("Digite um e-mail válido.","error");
+          if(!f.empresa.trim()) return toast("Informe o nome da empresa.","error");
+          setLoading(true);
+          const { error } = await supabase.from("leads").insert({ tipo:"diagnostico", source:"diagnostico", nome:f.nome, email:f.email, empresa:f.empresa, origem:"landing_diagnostico", status:"novo" });
+          supabase.functions.invoke("send-email",{ body:{ tipo:"diagnostico", email:f.email, nome:f.nome, subject:"✓ Diagnóstico solicitado — Crivo", body:"Recebemos sua solicitação de diagnóstico da Reforma Tributária. Nossa equipe entrará em contato em até 2 dias úteis." } }).catch(()=>null);
+          setLoading(false);
+          if(error) return toast(translateError(error.message),"error");
+          setSent(true);
+        }
+        return h("section",{className:"mx-auto max-w-4xl px-4 py-16"},
+          h(Reveal,null,
+            h("div",{className:"gold-panel rounded-xl border p-7"},
+              sent
+                ? h("div",{className:"fade-in py-4 text-center"},
+                    h("div",{className:"mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-success text-xl font-black text-white"},"✓"),
+                    h("h2",{className:"font-serif text-2xl font-bold"},"Diagnóstico solicitado!"),
+                    h("p",{className:"mt-2 text-sm text-slate-400"},`Recebemos seus dados, ${f.nome.split(" ")[0]}. Nossa equipe retorna em até 2 dias úteis no e-mail informado.`),
+                    h("p",{className:"mono-label mt-4 text-slate-500"},"Porto & Pacca Advogados · Adeke Adequação Corporativa"))
+                : h(React.Fragment,null,
+                    h("p",{className:"mono-label text-gold"},"★ Gratuito · sem compromisso"),
+                    h("h2",{className:"mt-2 font-serif text-2xl font-bold"},"Diagnóstico da Reforma Tributária para sua empresa"),
+                    h("p",{className:"mt-1 max-w-lg text-sm text-slate-400"},"Preencha o formulário e nossa equipe mapeia seus riscos e oportunidades em CBS/IBS — incluindo a análise da sua cadeia de fornecedores."),
+                    h("form",{onSubmit:submit,className:"mt-5 grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto]"},
+                      h(Input,{value:f.nome,onChange:e=>u("nome",e.target.value),placeholder:"Nome *","aria-label":"Nome"}),
+                      h(Input,{type:"email",value:f.email,onChange:e=>u("email",e.target.value),placeholder:"E-mail *","aria-label":"E-mail"}),
+                      h(Input,{value:f.empresa,onChange:e=>u("empresa",e.target.value),placeholder:"Empresa *","aria-label":"Empresa"}),
+                      h(Button,{type:"submit",disabled:loading},loading?"Enviando...":"Quero meu diagnóstico →")),
+                    h("p",{className:"mono-label mt-4 text-slate-500"},"Porto & Pacca Advogados · Adeke Adequação Corporativa · Retorno em até 2 dias úteis")))));
       }
       function CreditCompare() {
         return h("section", { className:"bg-white" }, h("div", { className:"mx-auto max-w-7xl px-4 py-16" },
