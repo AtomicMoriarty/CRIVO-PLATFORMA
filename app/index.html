@@ -65,18 +65,27 @@
       button:focus-visible,a:focus-visible{outline:2px solid var(--gold2);outline-offset:2px}
       html{scroll-behavior:smooth}
       ::selection{background:rgba(200,150,58,.35)}
-      ::-webkit-scrollbar{width:10px;height:10px}
+      ::-webkit-scrollbar{width:3px;height:3px}
       ::-webkit-scrollbar-track{background:var(--ink)}
-      ::-webkit-scrollbar-thumb{background:var(--ink3);border-radius:8px}
-      ::-webkit-scrollbar-thumb:hover{background:var(--gold-bd2)}
+      ::-webkit-scrollbar-thumb{background:var(--gold-bd2);border-radius:2px}
       button,a{transition:background-color .2s ease,color .2s ease,border-color .2s ease,transform .15s ease,opacity .2s ease,box-shadow .2s ease}
       button:active{transform:scale(.97)}
       input,select,textarea{transition:border-color .2s ease,box-shadow .2s ease}
       input:focus,select:focus,textarea:focus{box-shadow:0 0 0 3px rgba(200,150,58,.16);border-color:var(--gold-bd2)!important;outline:none}
       .glass{box-shadow:0 10px 30px -24px rgba(0,0,0,.9)}
       .hero-bg{background:radial-gradient(900px 420px at 82% -10%,rgba(200,150,58,.14),transparent 60%),radial-gradient(640px 320px at 8% 112%,rgba(46,134,193,.10),transparent 60%)}
-      .card-lift{transition:transform .25s ease,border-color .25s ease,box-shadow .25s ease}
-      .card-lift:hover{transform:translateY(-3px);border-color:var(--gold-bd2)!important;box-shadow:0 14px 34px -20px rgba(200,150,58,.4)!important}
+      .card-lift{position:relative;overflow:hidden;transition:transform .25s ease,border-color .25s ease,box-shadow .25s ease,background .25s ease}
+      .card-lift::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--gold),transparent);opacity:0;transition:opacity .25s ease}
+      .card-lift:hover{transform:translateY(-2px);border-color:var(--gold-bd2)!important;background:var(--card2)!important;box-shadow:0 14px 34px -22px rgba(200,150,58,.35)!important}
+      .card-lift:hover::after{opacity:1}
+      .eyebrow{display:inline-flex;align-items:center;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold2);border:1px solid var(--gold-bd);border-radius:2px;padding:5px 13px}
+      .eyebrow::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--gold2);animation:pulseOp 2s ease infinite}
+      @keyframes pulseOp{0%,100%{opacity:1}50%{opacity:.4}}
+      .gold-panel{background:linear-gradient(135deg,rgba(200,150,58,.12),rgba(200,150,58,.04))!important;border-color:var(--gold-bd2)!important}
+      .mono-label{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase}
+      .fill-g{background:linear-gradient(90deg,#3DB882,#5DEBA0)!important}
+      .fill-a{background:linear-gradient(90deg,#E0913A,#F0B060)!important}
+      .fill-r{background:linear-gradient(90deg,#E05252,#F07070)!important}
       @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
       .fade-in{animation:fadeIn .25s ease}
       @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
@@ -131,9 +140,9 @@
       }
       function risk(score) {
         const n = Number(score || 0);
-        if (n >= 800) return { label: "Baixo risco", color: "bg-success", text: "text-success", soft: "bg-green-50" };
-        if (n >= 600) return { label: "Médio risco", color: "bg-warning", text: "text-warning", soft: "bg-amber-50" };
-        return { label: "Alto risco", color: "bg-danger", text: "text-danger", soft: "bg-red-50" };
+        if (n >= 800) return { label: "Baixo risco", color: "bg-success", fill: "fill-g", text: "text-success", soft: "bg-green-50" };
+        if (n >= 600) return { label: "Médio risco", color: "bg-warning", fill: "fill-a", text: "text-warning", soft: "bg-amber-50" };
+        return { label: "Alto risco", color: "bg-danger", fill: "fill-r", text: "text-danger", soft: "bg-red-50" };
       }
       function translateError(message) {
         const m = String(message || "");
@@ -311,7 +320,8 @@
           return () => removeEventListener("toast", onToast);
         }, []);
         return h("div", { className:"fixed right-4 top-4 z-[60] space-y-2", role:"status", "aria-live":"polite" }, items.map((i) =>
-          h("div", { key:i.id, className:`toast-in flex items-start gap-2 rounded-lg px-4 py-3 shadow-lg text-sm max-w-sm ${i.type === "error" ? "bg-red-600 text-white" : "bg-emerald-700 text-white"}` },
+          h("div", { key:i.id, className:"toast-in flex items-start gap-2 rounded-lg border px-4 py-3 text-sm max-w-sm shadow-lg",
+            style:{ background:"var(--ink2)", borderColor:i.type === "error" ? "rgba(224,82,82,.55)" : "var(--gold-bd2)", color:i.type === "error" ? "#F07070" : "var(--gold3)" } },
             h("span", { className:"font-bold" }, i.type === "error" ? "✕" : "✓"),
             h("span", { className:"flex-1" }, i.message),
             h("button", { onClick:()=>setItems((x)=>x.filter((t)=>t.id!==i.id)), "aria-label":"Fechar aviso", className:"ml-1 shrink-0 font-bold opacity-60 hover:opacity-100" }, "✕"))
@@ -431,7 +441,7 @@
               h("span", { className:"text-sm font-bold" }, name),
               h("span", { className:`text-sm font-black ${has ? rr.text : "text-slate-400"}` }, has ? `${Math.round(value)}/1000` : "—")),
             has && h("div", { className:"scorebar mt-2 h-1.5 rounded-full bg-slate-100" },
-              h("span", { className:`block h-1.5 rounded-full ${rr.color}`, style:{ width:`${Math.min(value / 10, 100)}%` } })),
+              h("span", { className:`block h-1.5 rounded-full ${rr.fill}`, style:{ width:`${Math.min(value / 10, 100)}%` } })),
             info.label && h("p", { className:"mt-2 text-xs font-semibold text-slate-600" }, info.label),
             info.detail && h("p", { className:"mt-1 text-xs text-slate-500" }, info.detail),
             h("p", { className:"mt-1 text-[10px] uppercase tracking-wider text-slate-400" },
@@ -470,7 +480,7 @@
           h("div", { className:"modal-in mx-auto my-8 w-full max-w-2xl rounded-xl border border-slate-200 bg-navy p-6" },
             h("div", { className:"flex items-start justify-between gap-4" },
               h("div", null,
-                h("p", { className:"text-xs uppercase tracking-widest text-gold" }, "Know Your Provider"),
+                h("p", { className:"mono-label text-gold" }, "Know Your Provider"),
                 h("h2", { className:"mt-1 font-serif text-3xl font-black" }, info?.razao_social || "Empresa"),
                 h("p", { className:"mt-1 text-sm text-slate-400" }, formatCnpj(info?.cnpj))),
               h("button", { onClick:onClose, "aria-label":"Fechar", className:"rounded-lg border px-3 py-1 text-sm hover:bg-white/10" }, "✕")),
@@ -488,11 +498,11 @@
             score && h("div", { className:"mt-6" },
               h("div", { className:"flex items-end justify-between" },
                 h("div", null,
-                  h("p", { className:"text-xs uppercase tracking-widest text-slate-400" }, `Score Crivo ${score.version || "v2"}`),
+                  h("p", { className:"mono-label text-slate-400" }, `Score Crivo ${score.version || "v2"}`),
                   h("p", { className:`font-serif text-6xl font-black ${rr.text}` }, h(CountUp, { value: total }))),
                 h("span", { className:`rounded-full px-3 py-1 text-xs font-bold ${rr.soft} ${rr.text}` }, rr.label)),
               h("div", { className:"scorebar mt-3 h-2 rounded-full bg-slate-100" },
-                h("span", { className:`block h-2 rounded-full ${rr.color}`, style:{ width:`${Math.min(total / 10, 100)}%` } })),
+                h("span", { className:`block h-2 rounded-full ${rr.fill}`, style:{ width:`${Math.min(total / 10, 100)}%` } })),
               h("p", { className:"mt-2 text-xs text-slate-500" }, `Calculado em ${new Date(score.calculated_at).toLocaleString("pt-BR")} · 5 de 7 dimensões ativas`),
               h("div", { className:"mt-4" }, h(RiskBanner, { total })),
               h(ScoreBreakdown, { score }),
@@ -545,7 +555,7 @@
                 h(NavIcon, { d: NAV_ICONS[to] || NAV_ICONS["/dashboard"] }), label)))),
           h("main", { className:"flex-1" },
             h("div", { className:"flex items-center justify-between border-b bg-white px-5 py-4" },
-              h("div", { className:"min-w-0" }, h("p", { className:"text-xs uppercase tracking-widest text-slate-500" }, "Conta"), h("p", { className:"max-w-[180px] truncate font-semibold md:max-w-sm" }, company?.razao_social || user?.email || "Crivo")),
+              h("div", { className:"min-w-0" }, h("p", { className:"mono-label text-slate-500" }, "Conta"), h("p", { className:"max-w-[180px] truncate font-semibold md:max-w-sm" }, company?.razao_social || user?.email || "Crivo")),
               h("button", { onClick:signOut, className:"inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-slate-50" }, "Sair")),
             h("div", { className:"p-5" }, ...childList(children))));
       }
@@ -582,20 +592,31 @@
         }
         return h(PublicLayout, null,
           h("section", { className:"hero-bg bg-navy text-white" },
-            h("div", { className:"mx-auto grid max-w-7xl gap-10 px-4 py-20 md:grid-cols-[1.1fr_.9fr] md:items-center" },
-              h("div", null,
-                h("div", { className:"mb-5 inline-flex items-center gap-2 rounded-full border border-gold/40 px-3 py-1 text-xs font-bold uppercase tracking-widest text-gold" },
-                  h("span", { className:"dot-pulse h-2 w-2 rounded-full bg-gold" }),
-                  "Avaliação Tributária CBS/IBS · LC 214/2025"),
-                h("h1", { className:"font-serif text-5xl font-black leading-tight md:text-7xl" }, "Contrate com inteligência fiscal."),
-                h("p", { className:"mt-6 max-w-2xl text-lg text-slate-300" }, "O Crivo avalia seus fornecedores antes que a Receita avalie você: análise de CNPJ, situação fiscal e documentação, com score de aderência tributária e alertas automáticos."),
-                h("form", { onSubmit:diagnose, className:"mt-8 flex max-w-xl flex-col gap-3 rounded-2xl bg-white p-2 md:flex-row" },
-                  h(Input, { value:cnpj, onChange:e=>setCnpj(formatCnpj(e.target.value)), placeholder:"00.000.000/0000-00", "aria-label":"CNPJ do fornecedor", className:"border-0 text-slate-900" }),
-                  h(Button, { type:"submit", disabled:loading, className:"bg-gold text-navy hover:bg-yellow-500" }, loading ? "Analisando..." : "Diagnosticar agora")),
-                h("div", { className:"mt-5 flex flex-wrap gap-2 text-xs" }, ["Receita Federal integrada","Score explicável","Alertas automáticos"].map(x=>h("span",{key:x,className:"rounded-full bg-white/10 px-3 py-1"},x)))),
-              h(Card, { className:"bg-white/10 text-white border-white/10" },
-                h("p", { className:"text-sm text-slate-300" }, "Resumo da carteira ", h("span", { className:"rounded bg-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wider" }, "exemplo")),
-                h("div", { className:"mt-4 grid gap-3" }, [["Fornecedores monitorados",128],["Alertas críticos",7],["Score médio",812]].map(([a,b])=>h("div",{key:a,className:"flex items-center justify-between rounded-lg bg-white/10 p-4"},h("span",null,a),h("strong",{className:"text-2xl text-gold"},h(CountUp,{value:b,duration:1200})))))))),
+            h("div", { className:"mx-auto max-w-4xl px-4 pb-12 pt-20 text-center" },
+              h("div", { className:"eyebrow mb-7" }, "Avaliação Tributária CBS/IBS · LC 214/2025"),
+              h("h1", { className:"font-serif text-5xl font-black leading-[1.05] tracking-tight md:text-7xl" },
+                "O diretório de", h("br"), h("em", { className:"not-italic", style:{ color:"var(--gold2)" } }, "fornecedores verificados")),
+              h("p", { className:"mx-auto mt-6 max-w-xl text-base font-light leading-relaxed text-slate-300" },
+                "O Crivo analisa CNPJ, situação fiscal e documentação de cada fornecedor, gera um score de aderência tributária e monitora mudanças todos os dias — antes que a Receita olhe para você."),
+              h("div", { className:"mt-9 flex flex-wrap justify-center gap-3" },
+                h(Link, { to:"/cadastrar", className:"rounded-md bg-gold px-7 py-3 text-sm font-semibold text-navy hover:bg-yellow-500" }, "Começar grátis"),
+                h(Link, { to:"/diretorio", className:"rounded-md border border-white/15 px-7 py-3 text-sm text-slate-200 hover:border-gold/50 hover:text-gold" }, "Ver o diretório"))),
+            h("div", { className:"mx-auto max-w-4xl px-4 pb-14" },
+              h("div", { className:"gold-panel rounded-xl border p-7" },
+                h("p", { className:"mono-label text-gold" }, "★ Gratuito · sem compromisso"),
+                h("h2", { className:"mt-2 font-serif text-xl font-bold" }, "Diagnóstico instantâneo de um fornecedor"),
+                h("p", { className:"mt-1 max-w-lg text-sm text-slate-400" }, "Digite o CNPJ e veja a situação na Receita Federal com o Score Crivo preliminar."),
+                h("form", { onSubmit:diagnose, className:"mt-5 flex flex-col gap-2 md:flex-row" },
+                  h(Input, { value:cnpj, onChange:e=>setCnpj(formatCnpj(e.target.value)), placeholder:"00.000.000/0000-00", inputMode:"numeric", "aria-label":"CNPJ do fornecedor" }),
+                  h(Button, { type:"submit", disabled:loading, className:"md:w-64" }, loading ? "Analisando..." : "Diagnosticar agora →")))),
+            h("div", { className:"mx-auto grid max-w-4xl grid-cols-2 gap-2.5 px-4 pb-20 md:grid-cols-4" },
+              [["2026","Ano de teste da Reforma. Janela de 12–24 meses para agir."],
+               ["~28%","de crédito CBS/IBS em jogo a cada fornecedor contratado."],
+               ["Art. 47","LC 214/2025 — crédito condicionado à regularidade do fornecedor."],
+               ["6","documentos obrigatórios verificados e monitorados pelo Crivo."]].map(([n,t])=>
+                h("div", { key:n, className:"card-lift rounded-lg border border-white/10 bg-white/[.03] p-4 text-center" },
+                  h("p", { className:"font-serif text-2xl font-bold", style:{ color:"var(--gold2)" } }, n),
+                  h("p", { className:"mt-1.5 text-[11px] leading-snug text-slate-400" }, t))))),
           h(HowItWorks), h(CreditCompare), h(PlansSection), h(AccountantLead));
       }
       function CreditCompare() {
@@ -617,11 +638,14 @@
       function HowItWorks() {
         return h("section", { className:"mx-auto max-w-7xl px-4 py-16" },
           h("h2", { className:"font-serif text-4xl font-black text-navy" }, "Como funciona"),
-          h("div", { className:"mt-8 grid gap-5 md:grid-cols-3" }, [
-            ["1", "Cadastre os CNPJs", "Monte sua carteira de fornecedores críticos."],
-            ["2", "O Crivo consulta bases públicas", "Receita Federal, certidões e sinais de risco fiscal."],
-            ["3", "Receba alertas", "Mudanças relevantes viram alertas acionáveis, no painel e por e-mail."]
-          ].map(([n,t,d],i)=>h(Reveal,{key:n,delay:i*120},h(Card,null,h("div",{className:"mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-brand font-bold text-white"},n),h("h3",{className:"font-bold"},t),h("p",{className:"mt-2 text-sm text-slate-600"},d))))));
+          h("div", { className:"mt-8 grid gap-3 md:grid-cols-3" }, [
+            ["1", "Cadastre os CNPJs", "Monte sua carteira de fornecedores críticos em segundos — o Crivo busca os dados na Receita Federal."],
+            ["2", "Análise automática", "Situação cadastral, regime tributário, documentação e histórico viram um score explicável de 7 dimensões."],
+            ["3", "Alertas contínuos", "Mudança de situação fiscal, queda de score ou certidão vencendo viram alertas no painel e por e-mail."]
+          ].map(([n,t,d],i)=>h(Reveal,{key:n,delay:i*120},h(Card,null,
+            h("p",{className:"mono-label text-slate-500"},`Etapa ${n}`),
+            h("h3",{className:"mt-2 flex items-center gap-2.5 font-serif text-base font-bold",style:{color:"var(--gold2)"}},h("span",{className:"h-3.5 w-1 shrink-0 rounded-sm bg-gold"}),t),
+            h("p",{className:"mt-2 text-sm leading-relaxed text-slate-600"},d))))));
       }
       function PlansSection() {
         const { session, user, company } = useAuth();
@@ -650,11 +674,13 @@
         }
         return h("section", { className:"bg-white" }, h("div", { className:"mx-auto max-w-7xl px-4 py-16" },
           h("h2", { className:"font-serif text-4xl font-black text-navy" }, "Planos"),
-          h("div", { className:"mt-8 grid gap-5 md:grid-cols-3" }, plans.map(([id,name,price,items],i)=>h(Reveal,{key:id,delay:i*120},h(Card,{className:id==="pro"?"border-brand ring-2 ring-brand/20":""},
-            id==="pro" && h("span",{className:"rounded-full bg-gold px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-navy"},"Mais escolhido"),
-            h("h3",{className:"mt-2 text-xl font-black"},name), h("p",{className:"mt-2 text-3xl font-black"}, price ? money.format(price) : "R$ 0", h("span",{className:"text-sm font-medium text-slate-500"},"/mês")),
-            h("ul",{className:"mt-5 space-y-2"},items.map(i=>h("li",{key:i,className:"flex items-center gap-2 text-sm"},h("span",{className:"font-bold text-success"},"✓"),i))),
-            h("button",{onClick:()=>checkout(id),disabled:busy===id,className:"mt-6 inline-flex w-full justify-center rounded-lg bg-brand px-4 py-2 font-bold text-white disabled:opacity-50"}, busy===id ? "Abrindo..." : price ? `Assinar ${name}` : "Começar grátis")))))));
+          h("div", { className:"mt-10 grid gap-4 md:grid-cols-3" }, plans.map(([id,name,price,items],i)=>h(Reveal,{key:id,delay:i*120},h(Card,{className:`relative ${id==="pro"?"gold-panel":""}`},
+            id==="pro" && h("span",{className:"absolute -top-px left-1/2 -translate-x-1/2 rounded-b-md bg-gold px-3 py-1 font-mono text-[9px] font-bold uppercase tracking-widest text-navy"},"Mais popular"),
+            h("p",{className:"mono-label text-slate-500"},{free:"Gratuito",pro:"Profissional",premium:"Completo"}[id]),
+            h("h3",{className:"mt-1 font-serif text-2xl font-bold"},name),
+            h("p",{className:"mt-4 font-serif text-4xl font-black",style:{color:"var(--gold2)"}}, price ? money.format(price) : "R$ 0", h("span",{className:"font-sans text-sm font-normal text-slate-500"}," /mês")),
+            h("ul",{className:"mt-5 space-y-1.5 border-t border-white/10 pt-4"},items.map(it=>h("li",{key:it,className:"flex items-start gap-2 text-sm text-slate-600"},h("span",{className:"mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-gold/15 text-[8px] font-bold text-gold"},"✓"),it))),
+            h("button",{onClick:()=>checkout(id),disabled:busy===id,className:`mt-6 inline-flex w-full justify-center rounded-md px-4 py-2.5 text-sm font-semibold disabled:opacity-50 ${id==="free"?"border border-white/15 text-slate-300 hover:border-gold/50 hover:text-gold":"bg-gold text-navy hover:bg-yellow-500"}`}, busy===id ? "Abrindo..." : price ? `Começar no ${name}` : "Criar conta grátis")))))));
       }
       function AccountantLead() {
         return h("section", { className:"mx-auto max-w-7xl px-4 py-16" },
@@ -748,7 +774,7 @@
         }
         const Layout = session ? PrivateLayout : PublicLayout;
         return h(Layout, null, h("main",{className:"mx-auto max-w-7xl px-4 py-12"},
-          h("h1",{className:"font-serif text-5xl font-black text-navy"},"Diretório de fornecedores"),
+          h("h1",{className:"font-serif text-4xl font-black text-navy"},"Diretório de fornecedores"),
           h("p",{className:"mt-3 max-w-2xl text-slate-600"},"Empresas verificadas e aprovadas pela equipe Crivo. Você também pode buscar qualquer CNPJ para analisar um fornecedor que ainda não está no diretório."),
           h("form",{onSubmit:(e)=>{e.preventDefault();doSearch();},className:"mt-8 flex flex-col gap-3 md:flex-row"},
             h(Input,{value:term,onChange:e=>setTerm(e.target.value),placeholder:"CNPJ ou razão social","aria-label":"Buscar empresa"}),
@@ -767,12 +793,12 @@
         return h(Card,null,
           h("div",{className:"flex items-start justify-between gap-4"},
             h("div",null,
-              h("h3",{className:"font-bold"},row.razao_social, row.exemplo && h("span",{className:"ml-2 rounded bg-slate-100 px-2 py-0.5 text-[10px] uppercase tracking-wider text-slate-500"},"exemplo")),
+              h("h3",{className:"font-serif text-base font-bold"},row.razao_social, row.exemplo && h("span",{className:"mono-label ml-2 rounded bg-slate-100 px-2 py-0.5 text-slate-500"},"exemplo")),
               h("p",{className:"mt-1 text-sm text-slate-500"},formatCnpj(row.cnpj))),
             hasScore
               ? h("span",{className:`rounded-full px-3 py-1 text-xs font-bold ${rr.soft} ${rr.text}`}, session ? Math.round(row.score) : rr.label)
               : h("span",{className:"rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500"},"Sem análise")),
-          hasScore && h("div",{className:"mt-4 scorebar h-2 rounded-full bg-slate-100"},h("span",{className:`block h-2 rounded-full ${rr.color}`,style:{width:`${Math.min(Number(row.score)/10,100)}%`}})),
+          hasScore && h("div",{className:"mt-4 scorebar h-2 rounded-full bg-slate-100"},h("span",{className:`block h-2 rounded-full ${rr.fill}`,style:{width:`${Math.min(Number(row.score)/10,100)}%`}})),
           h("div",{className:"mt-4 flex flex-wrap gap-2 text-xs text-slate-600"},[row.segmento,REGIME_LABEL[row.regime]||row.regime,row.estado,row.situacao_rfb].filter(Boolean).map(x=>h("span",{key:String(x),className:"rounded-full bg-slate-100 px-2 py-1"},x))),
           h("div",{className:"mt-5 flex flex-wrap gap-2"},
             h(Button,{onClick:onView},"Ver análise"),
@@ -1166,7 +1192,7 @@
         const Layout = session ? PrivateLayout : PublicLayout;
         return h(Layout,null,h("main",{className:"mx-auto grid max-w-7xl gap-8 px-4 py-12 md:grid-cols-[1fr_.9fr]"},
           h("div",null,
-            h("h1",{className:"font-serif text-5xl font-black text-navy"},"Dashboard para escritórios"),
+            h("h1",{className:"font-serif text-4xl font-black text-navy"},"Dashboard para escritórios"),
             h("p",{className:"mt-4 text-slate-600"},"Gerencie clientes, fornecedores em risco, alertas críticos e comissões recorrentes de 20% sobre cada cliente indicado."),
             h("div",{className:"mt-8 grid gap-4 md:grid-cols-2"},[
               ["Visão multiempresa","Todos os clientes e seus fornecedores em um único painel."],
@@ -1187,7 +1213,7 @@
       function LegalPage({ title, version, children }) {
         return h(PublicLayout,null,h("main",{className:"mx-auto max-w-3xl px-4 py-12"},
           h("h1",{className:"font-serif text-4xl font-black text-navy"},title),
-          h("p",{className:"mt-2 text-xs uppercase tracking-widest text-slate-500"},version),
+          h("p",{className:"mt-2 mono-label text-slate-500"},version),
           h("div",{className:"mt-8 space-y-6 text-sm leading-relaxed text-slate-600"},...childList(children))));
       }
       function LegalSection({ title, children }) {
@@ -1276,7 +1302,7 @@
           h("div", { className:"modal-in mx-auto my-8 w-full max-w-3xl rounded-xl border border-slate-200 bg-navy p-6" },
             h("div", { className:"flex items-start justify-between gap-4" },
               h("div", null,
-                h("p", { className:"text-xs uppercase tracking-widest text-gold" }, "Análise de cadastro"),
+                h("p", { className:"mono-label text-gold" }, "Análise de cadastro"),
                 h("h2", { className:"mt-1 font-serif text-3xl font-black" }, company.razao_social),
                 h("p", { className:"mt-1 text-sm text-slate-400" }, formatCnpj(company.cnpj))),
               h("button", { onClick:onClose, "aria-label":"Fechar", className:"rounded-lg border px-3 py-1 text-sm hover:bg-white/10" }, "✕")),
