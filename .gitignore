@@ -9,3 +9,6 @@ supabase/.temp/
 # Misc
 node_modules/
 .DS_Store
+
+# Prisma generated client
+generated/
