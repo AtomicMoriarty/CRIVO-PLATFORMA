@@ -739,6 +739,9 @@
         const [loading,setLoading] = useState(false);
         const [usingExamples,setUsingExamples] = useState(false);
         const [selected,setSelected] = useState(null);
+        const [fRegime,setFRegime] = useState("");
+        const [fUf,setFUf] = useState("");
+        const [fScore,setFScore] = useState(false);
 
         async function loadTop() {
           setLoading(true);
@@ -809,6 +812,14 @@
           if (row.exemplo) return toast("Esta é uma empresa de exemplo. Busque um CNPJ real para ver a análise.", "error");
           setSelected(row);
         }
+        const ufs = [...new Set(results.map((r)=>r.estado).filter(Boolean))].sort();
+        const visible = results.filter((r)=>{
+          if (fRegime && r.regime !== fRegime) return false;
+          if (fUf && r.estado !== fUf) return false;
+          if (fScore && !(Number(r.score) >= 800)) return false;
+          return true;
+        });
+        const chipCls = (on) => `mono-label rounded border px-2.5 py-1.5 transition ${on ? "border-gold/50 bg-yellow-50 text-gold" : "border-white/15 text-slate-400 hover:border-gold/40 hover:text-gold"}`;
         const Layout = session ? PrivateLayout : PublicLayout;
         return h(Layout, null, h("main",{className:"mx-auto max-w-7xl px-4 py-12"},
           h("h1",{className:"font-serif text-4xl font-black text-navy"},"Diretório de fornecedores"),
@@ -816,10 +827,17 @@
           h("form",{onSubmit:(e)=>{e.preventDefault();doSearch();},className:"mt-8 flex flex-col gap-3 md:flex-row"},
             h(Input,{value:term,onChange:e=>setTerm(e.target.value),placeholder:"CNPJ ou razão social","aria-label":"Buscar empresa"}),
             h(Button,{type:"submit",disabled:loading,className:"md:w-40"}, loading?"Buscando...":"Buscar")),
+          h("div",{className:"mt-4 flex flex-wrap items-center gap-2"},
+            h("button",{type:"button",onClick:()=>setFScore(!fScore),className:chipCls(fScore)},"Score ≥ 800"),
+            ufs.map((uf)=>h("button",{key:uf,type:"button",onClick:()=>setFUf(fUf===uf?"":uf),className:chipCls(fUf===uf)},uf)),
+            [["lucro_real","Lucro Real"],["lucro_presumido","L. Presumido"],["simples","Simples"],["mei","MEI"]].map(([v,l])=>
+              h("button",{key:v,type:"button",onClick:()=>setFRegime(fRegime===v?"":v),className:chipCls(fRegime===v)},l)),
+            (fScore||fUf||fRegime) && h("button",{type:"button",onClick:()=>{setFScore(false);setFUf("");setFRegime("");},className:"mono-label px-2 py-1.5 text-slate-500 hover:text-danger"},"limpar ✕")),
+          h("p",{className:"mono-label mt-4 text-slate-500"},`${visible.length} empresa${visible.length!==1?"s":""} encontrada${visible.length!==1?"s":""}`),
           usingExamples && h(Notice,{tone:"gold",className:"mt-4 text-xs"},"Exibindo empresas de exemplo. Busque um CNPJ real para gerar a primeira análise."),
           loading && !results.length && h("div",{className:"mt-8 grid gap-5 md:grid-cols-2"},[1,2,3,4].map(i=>h(SkeletonCard,{key:i}))),
-          h("div",{className:"mt-8 grid gap-5 md:grid-cols-2"},results.map((row,i)=>h(CompanyCard,{key:row.id||row.cnpj||i,row,session,onView:()=>view(row),onAdd:()=>addPortfolio(row)}))),
-          !loading && !results.length && h("p",{className:"mt-8 text-sm text-slate-500"},"Nenhum resultado. Tente buscar pelo CNPJ completo."),
+          h("div",{className:"mt-6 grid gap-5 md:grid-cols-2"},visible.map((row,i)=>h(CompanyCard,{key:row.id||row.cnpj||i,row,session,onView:()=>view(row),onAdd:()=>addPortfolio(row)}))),
+          !loading && !visible.length && h("p",{className:"mt-8 text-sm text-slate-500"},results.length?"Nenhuma empresa com esses filtros — clique em \"limpar ✕\" para ver todas.":"Nenhum resultado. Tente buscar pelo CNPJ completo."),
           !session && h(Notice,{tone:"gold",className:"mt-8"},"Crie uma conta gratuita para ver o score completo, a explicação de cada dimensão e monitorar fornecedores."),
           h(ScoreDisclaimer)),
           selected && h(KypModal,{company:selected,onClose:()=>setSelected(null),onAdd:session?addPortfolio:null}));
