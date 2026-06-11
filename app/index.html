@@ -724,6 +724,13 @@
         const [fRegime,setFRegime] = useState("");
         const [fUf,setFUf] = useState("");
         const [fScore,setFScore] = useState(false);
+        const [matches,setMatches] = useState(null);
+        useEffect(()=>{
+          if(!company?.id) return;
+          supabase.functions.invoke("match-suppliers",{ body:{ buyer_company_id:company.id, limit:6 } }).then(({ data })=>{
+            if (Array.isArray(data?.data)) setMatches(data.data.map((m)=>({ ...m, score: m.latest_score?.total ?? null })));
+          }).catch(()=>null);
+        },[company?.id]);
 
         async function loadTop() {
           setLoading(true);
@@ -809,6 +816,10 @@
           h("form",{onSubmit:(e)=>{e.preventDefault();doSearch();},className:"mt-8 flex flex-col gap-3 md:flex-row"},
             h(Input,{value:term,onChange:e=>setTerm(e.target.value),placeholder:"CNPJ ou razão social","aria-label":"Buscar empresa"}),
             h(Button,{type:"submit",disabled:loading,className:"md:w-40"}, loading?"Buscando...":"Buscar")),
+          matches && matches.length > 0 && h("div",{className:"mt-8"},
+            h("p",{className:"mono-label text-gold"},"★ Recomendados para você"),
+            h("p",{className:"mt-1 text-xs text-slate-500"},"Fornecedores compatíveis com o estado, segmento e regime tributário da sua empresa."),
+            h("div",{className:"mt-3 grid gap-5 md:grid-cols-2"},matches.map((m)=>h(CompanyCard,{key:m.id,row:m,session,onView:()=>setSelected(m),onAdd:()=>addPortfolio(m)})))),
           h("div",{className:"mt-4 flex flex-wrap items-center gap-2"},
             h("button",{type:"button",onClick:()=>setFScore(!fScore),className:chipCls(fScore)},"Score ≥ 800"),
             ufs.map((uf)=>h("button",{key:uf,type:"button",onClick:()=>setFUf(fUf===uf?"":uf),className:chipCls(fUf===uf)},uf)),
@@ -832,11 +843,14 @@
             h("div",null,
               h("h3",{className:"font-serif text-base font-bold"},row.razao_social, row.exemplo && h("span",{className:"mono-label ml-2 rounded bg-slate-100 px-2 py-0.5 text-slate-500"},"exemplo")),
               h("p",{className:"mt-1 text-sm text-slate-500"},formatCnpj(row.cnpj))),
-            hasScore
-              ? h("span",{className:`rounded-full px-3 py-1 text-xs font-bold ${rr.soft} ${rr.text}`}, session ? Math.round(row.score) : rr.label)
-              : h("span",{className:"rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500"},"Sem análise")),
+            h("div",{className:"flex flex-col items-end gap-1"},
+              hasScore
+                ? h("span",{className:`rounded-full px-3 py-1 text-xs font-bold ${rr.soft} ${rr.text}`}, session ? Math.round(row.score) : rr.label)
+                : h("span",{className:"rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500"},"Sem análise"),
+              row.match_score && h("span",{className:"mono-label rounded border border-gold/50 bg-yellow-50 px-2 py-0.5 text-gold"},`Match ${Math.round(row.match_score/10)}%`))),
           hasScore && h("div",{className:"mt-4 scorebar h-2 rounded-full bg-slate-100"},h("span",{className:`block h-2 rounded-full ${rr.fill}`,style:{width:`${Math.min(Number(row.score)/10,100)}%`}})),
           h("div",{className:"mt-4 flex flex-wrap gap-2 text-xs text-slate-600"},[row.segmento,REGIME_LABEL[row.regime]||row.regime,row.estado,row.situacao_rfb].filter(Boolean).map(x=>h("span",{key:String(x),className:"rounded-full bg-slate-100 px-2 py-1"},x))),
+          Array.isArray(row.match_reasons) && row.match_reasons.length > 0 && h("div",{className:"mt-2 flex flex-wrap gap-1"},row.match_reasons.map(r=>h("span",{key:r,className:"mono-label rounded bg-yellow-50 px-1.5 py-0.5 text-gold"},r))),
           h("div",{className:"mt-5 flex flex-wrap gap-2"},
             h(Button,{onClick:onView},"Ver análise"),
             session ? h(Button,{variant:"ghost",onClick:onAdd},"Adicionar à carteira")
