@@ -10,9 +10,10 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
 const DOC_LABELS: Record<string, string> = {
-  certidao_federal: "CND Federal (PGFN)",
-  certidao_estadual: "Certidão Estadual (SEFAZ)",
+  certidao_federal: "CND Federal (PGFN/RFB)",
+  crf_fgts: "CRF FGTS",
   certidao_trabalhista: "CNDT Trabalhista",
+  certidao_estadual: "Certidão Estadual (SEFAZ)",
   nf_referencia: "Notas Fiscais (3 meses)",
   contrato_social: "Contrato Social",
 };
@@ -38,11 +39,11 @@ function calcRegularidade(situacao: string | null) {
 
 function calcRegimeCnae(regime: string | null, cnae: string | null) {
   const cnae2 = String(cnae || "").replace(/\D/g, "").slice(0, 2);
-  if (regime === "lucro_real") return { score: 900, label: "Lucro Real — potencial de crédito integral", detail: "Empresas no Lucro Real têm o maior potencial de geração e aproveitamento de créditos CBS/IBS." };
+  if (regime === "lucro_real") return { score: 900, label: "Lucro Real — potencial de crédito integral", detail: "Regime regular CBS/IBS: maior potencial de crédito para o contratante (alíquota de referência estimada em ~28%), com rastreabilidade via NF-e e SPED." };
   if (regime === "lucro_presumido" && CNAE_INDUSTRY.includes(cnae2)) return { score: 820, label: "Lucro Presumido (indústria) — crédito relevante", detail: "Indústrias no Lucro Presumido geram crédito IBS sobre insumos." };
   if (regime === "lucro_presumido") return { score: 780, label: "Lucro Presumido — crédito parcial", detail: "Empresas no Lucro Presumido geram crédito CBS restrito. Verifique a alíquota efetiva." };
   if (regime === "simples" && CNAE_INDUSTRY.includes(cnae2)) return { score: 550, label: "Simples Nacional (indústria) — crédito restrito", detail: "Industriais no Simples: crédito CBS/IBS limitado à alíquota efetiva de recolhimento." };
-  if (regime === "simples") return { score: 600, label: "Simples Nacional — crédito limitado", detail: "Optantes do Simples geram crédito proporcional à alíquota efetiva." };
+  if (regime === "simples") return { score: 600, label: "Simples Nacional — crédito limitado", detail: "Crédito proporcional ao CBS/IBS embutido no DAS — na prática pode ficar próximo de 3% da operação, muito abaixo do crédito integral do regime regular (Art. 47, §9º, II, LC 214/2025)." };
   if (regime === "mei") return { score: 150, label: "MEI — crédito muito limitado", detail: "MEIs não recolhem CBS/IBS separadamente. Aproveitamento pelo tomador é muito restrito." };
   return { score: 500, label: "Compatibilidade não determinada", detail: "Regime ou CNAE não identificados. Complete o cadastro da empresa." };
 }

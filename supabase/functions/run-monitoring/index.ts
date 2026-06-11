@@ -8,7 +8,8 @@ const MAX_COMPANIES = 10;
 const RFB_DELAY_MS = 21000;
 
 const DOC_LABELS: Record<string, string> = {
-  certidao_federal: "CND Federal (PGFN)",
+  certidao_federal: "CND Federal (PGFN/RFB)",
+  crf_fgts: "CRF FGTS",
   certidao_estadual: "Certidão Estadual (SEFAZ)",
   certidao_municipal: "Certidão Municipal",
   certidao_trabalhista: "CNDT Trabalhista",

@@ -178,15 +178,19 @@
       };
 
       const DOC_META = {
-        certidao_federal: { label: "CND Federal (PGFN)", required: true, hasExpiry: true },
-        certidao_estadual: { label: "Certidão Estadual (SEFAZ)", required: true, hasExpiry: true },
-        certidao_municipal: { label: "Certidão Municipal", required: false, hasExpiry: true },
-        certidao_trabalhista: { label: "CNDT — Trabalhista", required: true, hasExpiry: true },
-        nf_referencia: { label: "Notas Fiscais (últimos 3 meses)", required: true, hasExpiry: false },
-        contrato_social: { label: "Contrato Social / Estatuto", required: true, hasExpiry: false },
-        alteracao_contratual: { label: "Última Alteração Contratual", required: false, hasExpiry: false },
+        certidao_federal: { label: "CND Federal (PGFN/RFB)", required: true, hasExpiry: true, dias: 180, fonte: "Receita Federal / PGFN" },
+        crf_fgts: { label: "CRF — Regularidade do FGTS", required: true, hasExpiry: true, dias: 30, fonte: "fgts.caixa.gov.br" },
+        certidao_trabalhista: { label: "CNDT — Trabalhista", required: true, hasExpiry: true, dias: 180, fonte: "tst.jus.br" },
+        certidao_estadual: { label: "Certidão Estadual (SEFAZ)", required: true, hasExpiry: true, dias: 90, fonte: "portal da SEFAZ do estado" },
+        nf_referencia: { label: "Notas Fiscais (últimos 3 meses)", required: true, hasExpiry: false, fonte: "emitidas pela própria empresa" },
+        contrato_social: { label: "Contrato Social / Estatuto", required: true, hasExpiry: false, fonte: "Junta Comercial" },
+        guia_cbs_ibs: { label: "Guias de recolhimento CBS/IBS (DARF)", required: false, hasExpiry: false, fonte: "e-CAC" },
+        regime_regular: { label: "Comprovante de Regime Regular CBS/IBS", required: false, hasExpiry: false, fonte: "Comitê Gestor (a partir de 2027)" },
+        certidao_municipal: { label: "Certidão Municipal (ISS)", required: false, hasExpiry: true, dias: 90, fonte: "portal da prefeitura" },
+        alteracao_contratual: { label: "Última Alteração Contratual", required: false, hasExpiry: false, fonte: "Junta Comercial" },
         outros: { label: "Outros documentos", required: false, hasExpiry: false },
       };
+      const REQUIRED_DOC_COUNT = Object.values(DOC_META).filter((m) => m.required).length;
       const docLabel = (tipo) => DOC_META[tipo]?.label || tipo;
 
       const DIM_META = [
@@ -592,7 +596,23 @@
               h(Card, { className:"bg-white/10 text-white border-white/10" },
                 h("p", { className:"text-sm text-slate-300" }, "Resumo da carteira ", h("span", { className:"rounded bg-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wider" }, "exemplo")),
                 h("div", { className:"mt-4 grid gap-3" }, [["Fornecedores monitorados",128],["Alertas críticos",7],["Score médio",812]].map(([a,b])=>h("div",{key:a,className:"flex items-center justify-between rounded-lg bg-white/10 p-4"},h("span",null,a),h("strong",{className:"text-2xl text-gold"},h(CountUp,{value:b,duration:1200})))))))),
-          h(HowItWorks), h(PlansSection), h(AccountantLead));
+          h(HowItWorks), h(CreditCompare), h(PlansSection), h(AccountantLead));
+      }
+      function CreditCompare() {
+        return h("section", { className:"bg-white" }, h("div", { className:"mx-auto max-w-7xl px-4 py-16" },
+          h(Reveal, null,
+            h("h2", { className:"font-serif text-4xl font-black text-navy" }, "O custo invisível do fornecedor errado"),
+            h("p", { className:"mt-3 max-w-2xl text-slate-600" }, "Com a reforma tributária (LC 214/2025), o regime do fornecedor define quanto crédito CBS/IBS sua empresa aproveita. Na mesma compra de R$ 100 mil:")),
+          h("div", { className:"mt-8 grid gap-5 md:grid-cols-2" },
+            h(Reveal, null, h(Card, { className:"border-success/40" },
+              h("p", { className:"text-xs font-bold uppercase tracking-widest text-success" }, "Fornecedor no regime regular (Lucro Real)"),
+              h("p", { className:"mt-3 font-serif text-5xl font-black text-success" }, "~R$ 28 mil"),
+              h("p", { className:"mt-2 text-sm text-slate-600" }, "de potencial de crédito CBS/IBS para abater dos seus impostos."))),
+            h(Reveal, { delay:120 }, h(Card, { className:"border-danger/40" },
+              h("p", { className:"text-xs font-bold uppercase tracking-widest text-danger" }, "Fornecedor no Simples (sem regime híbrido)"),
+              h("p", { className:"mt-3 font-serif text-5xl font-black text-danger" }, "~R$ 3 mil"),
+              h("p", { className:"mt-2 text-sm text-slate-600" }, "o fornecedor mais \"barato\" na nota pode sair R$ 25 mil mais caro na carga tributária efetiva.")))),
+          h("p", { className:"mt-4 text-xs text-slate-500" }, "Valores ilustrativos com base nas alíquotas de referência estimadas da LC 214/2025. O aproveitamento real depende da operação — o Crivo indica o potencial, não garante o crédito.")));
       }
       function HowItWorks() {
         return h("section", { className:"mx-auto max-w-7xl px-4 py-16" },
@@ -1053,6 +1073,11 @@
           setDocs(data||[]);
         }
         useEffect(()=>{load()},[company?.id]);
+        useEffect(()=>{
+          const m=DOC_META[tipo];
+          if(m?.hasExpiry&&m.dias) setValid(new Date(Date.now()+m.dias*86400000).toISOString().slice(0,10));
+          else if(!m?.hasExpiry) setValid("");
+        },[tipo]);
 
         function pickFile(e){
           const f=e.target.files[0];
@@ -1102,8 +1127,8 @@
               h("strong",null,"Para elevar o score, envie: "),requiredMissing.join(", ")),
             h("form",{onSubmit:upload,className:"mt-6 grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end"},
               h(Field,{label:"Arquivo"},h("input",{type:"file",accept:ACCEPTED.join(","),onChange:pickFile,className:"w-full rounded-lg border p-2"})),
-              h(Field,{label:"Tipo de documento"},h(Select,{value:tipo,onChange:e=>setTipo(e.target.value)},Object.entries(DOC_META).map(([k,m])=>h("option",{key:k,value:k},m.label)))),
-              h(Field,{label:"Validade do documento",hint:DOC_META[tipo]?.hasExpiry?"Obrigatória para certidões.":"Opcional para este tipo."},h(Input,{type:"date",value:valid,onChange:e=>setValid(e.target.value)})),
+              h(Field,{label:"Tipo de documento",hint:[DOC_META[tipo]?.fonte && `Onde emitir: ${DOC_META[tipo].fonte}`, DOC_META[tipo]?.dias && `validade típica de ${DOC_META[tipo].dias} dias`].filter(Boolean).join(" · ") || undefined},h(Select,{value:tipo,onChange:e=>setTipo(e.target.value)},Object.entries(DOC_META).map(([k,m])=>h("option",{key:k,value:k},m.label)))),
+              h(Field,{label:"Validade do documento",hint:DOC_META[tipo]?.hasExpiry?"Data sugerida automaticamente — ajuste conforme o documento.":"Opcional para este tipo."},h(Input,{type:"date",value:valid,onChange:e=>setValid(e.target.value)})),
               h(Button,{type:"submit",disabled:loading,className:"md:mb-6"},loading?"Enviando...":"Enviar"))),
           h(Card,{className:"mt-6"},
             h("h2",{className:"font-bold"},"Arquivos enviados"),
@@ -1178,6 +1203,7 @@
           h(LegalSection,{title:"6. Retenção"},h("p",null,"Dados fiscais: 5 anos (obrigação legal — Art. 195, CTN). Dados de conta: até a exclusão da conta + 90 dias. Logs de acesso: 1 ano.")),
           h(LegalSection,{title:"7. Direitos do titular (Art. 18, LGPD)"},h("p",null,"Você pode solicitar acesso, correção, exclusão, portabilidade e revogação de consentimento pelo e-mail dpo@adeke.com.br. Prazo de resposta: 15 dias.")),
           h(LegalSection,{title:"8. Segurança"},h("p",null,"Criptografia em trânsito (TLS) e em repouso, autenticação gerenciada e controle de acesso por linha (RLS) no banco de dados.")),
+          h(LegalSection,{title:"9. Papéis no tratamento e dados de sócios"},h("p",null,"O Crivo atua como controladora dos dados públicos que coleta de fontes oficiais (Receita Federal, PGFN) e como operadora dos dados que contratantes nos instruem a tratar sobre seus fornecedores. Dados de sócios pessoas físicas (nome e qualificação, obtidos do quadro societário público) são tratados com base em legítimo interesse e minimização — sócios podem exercer seus direitos (Art. 18, LGPD) pelo e-mail dpo@adeke.com.br.")),
           h(ScoreDisclaimer));
       }
       function Termos() {
@@ -1269,7 +1295,7 @@
                   : h("p", { className:"mt-1 text-xs text-slate-500" }, "Nenhum usuário vinculado (empresa adicionada pela plataforma ou por um contratante).")),
             h("div", { className:"mt-4 rounded-lg border border-slate-200 p-3" },
               h("p", { className:"text-sm font-bold" }, "Documentação"),
-              h("p", { className:"mt-1 text-xs text-slate-500" }, "Documentos obrigatórios para entrar no diretório: CND Federal, Certidão Estadual, CNDT, Notas Fiscais (3 meses) e Contrato Social."),
+              h("p", { className:"mt-1 text-xs text-slate-500" }, `Documentos obrigatórios para entrar no diretório: ${Object.values(DOC_META).filter((m)=>m.required).map((m)=>m.label).join(", ")}.`),
               ...Object.entries(DOC_META).map(([tipo, meta]) => {
                 const doc = (byTipo[tipo] || [])[0];
                 const badge = doc ? (STATUS_BADGE[doc.status] || STATUS_BADGE.pending) : null;
@@ -1345,7 +1371,7 @@
                   h("tbody", null, rows.map((c) => h("tr", { key:c.id, className:"border-b" },
                     h("td", { className:"py-3 pr-3 font-semibold" }, c.razao_social),
                     h("td", { className:"pr-3 whitespace-nowrap" }, formatCnpj(c.cnpj)),
-                    h("td", { className:"pr-3" }, h("span", { className:validCount(c.id) >= 5 ? "font-bold text-success" : "" }, `${validCount(c.id)}/5`)),
+                    h("td", { className:"pr-3" }, h("span", { className:validCount(c.id) >= REQUIRED_DOC_COUNT ? "font-bold text-success" : "" }, `${validCount(c.id)}/${REQUIRED_DOC_COUNT}`)),
                     h("td", { className:"pr-3" }, h("span", { className:c.situacao_rfb === "ativa" ? "text-success" : "text-danger" }, c.situacao_rfb || "—")),
                     h("td", { className:"pr-3" }, c.listed
                       ? h("span", { className:"rounded-full bg-green-50 px-2 py-1 text-xs font-bold text-success" }, "Publicado")
