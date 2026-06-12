@@ -259,8 +259,9 @@
         } catch { return null; }
       }
       async function completeSetup(user, pending) {
+        const fornecedor = pending.perfil === "fornecedor";
         const base = {
-          id: user.id, full_name: pending.nome, role: "buyer", plan: pending.plano || "free",
+          id: user.id, full_name: pending.nome, role: fornecedor ? "supplier" : "buyer", plan: pending.plano || "free",
           lgpd_consent_version: "1.0", lgpd_consent_at: new Date().toISOString(), monitoring_consent: true,
         };
         let { error: pErr } = await supabase.from("profiles").upsert({ ...base, email: pending.email, display_name: pending.nome, username: String(pending.email).split("@")[0] });
@@ -274,7 +275,7 @@
           const { data, error } = await supabase.from("companies").insert({
             user_id: user.id, cnpj: pending.cnpj, razao_social: pending.razao_social,
             nome_fantasia: pending.nome_fantasia || null, telefone: pending.telefone || null,
-            segmento: pending.segmento || null, tipo: "contratante", situacao_rfb: "ativa",
+            segmento: pending.segmento || null, tipo: fornecedor ? "fornecedor" : "contratante", situacao_rfb: "ativa",
           }).select().single();
           if (error) { toast(translateError(error.message), "error"); return null; }
           company = data;
@@ -617,6 +618,7 @@
                 ...socios.slice(0, 6).map((s, i) => h("p", { key:i, className:"mt-1 text-xs text-slate-500" }, `${s?.nome || "Sócio"}${s?.qual ? ` — ${s.qual}` : ""}`))),
               h(ScoreDisclaimer)),
             h("div", { className:"mt-6 flex flex-wrap justify-end gap-2" },
+              info?.listed && h(Link, { to:`/empresa/${cleanCnpj(info.cnpj)}`, className:"inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-bold hover:bg-white/10" }, h(Icon, { name:"share", size:13 }), "Página pública"),
               session && onAdd && h(Button, { onClick:() => onAdd(info) }, "Adicionar à carteira"),
               !session && h(Link, { to:"/cadastrar", className:"rounded-lg bg-gold px-4 py-2 text-sm font-bold text-navy" }, "Criar conta para monitorar"),
               h(Button, { variant:"ghost", onClick:onClose }, "Fechar"))));
@@ -677,7 +679,7 @@
         return h("footer", { className:"border-t bg-navy text-white" },
           h("div", { className:"mx-auto grid max-w-7xl gap-6 px-4 py-10 md:grid-cols-4" },
             h("div", null, h("h3", { className:"font-serif text-2xl font-black" }, "Crivo."), h("p", { className:"mt-2 text-sm text-slate-300" }, "Inteligência fiscal aplicada à cadeia de fornecedores.")),
-            h("div", null, h("p", { className:"font-semibold" }, "Produto"), h(Link, { to:"/diretorio", className:"mt-2 block text-sm text-slate-300" }, "Diretório"), h(Link, { to:"/planos", className:"mt-2 block text-sm text-slate-300" }, "Planos")),
+            h("div", null, h("p", { className:"font-semibold" }, "Produto"), h(Link, { to:"/diretorio", className:"mt-2 block text-sm text-slate-300" }, "Diretório"), h(Link, { to:"/planos", className:"mt-2 block text-sm text-slate-300" }, "Planos"), h(Link, { to:"/cadastrar?perfil=fornecedor", className:"mt-2 block text-sm text-slate-300" }, "Sou fornecedor")),
             h("div", null, h("p", { className:"font-semibold" }, "Legal"), h(Link, { to:"/termos", className:"mt-2 block text-sm text-slate-300" }, "Termos de Uso"), h(Link, { to:"/privacidade", className:"mt-2 block text-sm text-slate-300" }, "Política de Privacidade")),
             h("div", null, h("p", { className:"font-semibold" }, "Contato"), h("p", { className:"mt-2 text-sm text-slate-300" }, "contato@adeke.com.br"), h("p", { className:"mt-2 text-sm text-slate-300" }, "dpo@adeke.com.br (DPO)"))),
           h("div", { className:"border-t border-white/10 px-4 py-4 text-center text-xs text-slate-400" },
@@ -696,7 +698,8 @@
                 "O Crivo analisa CNPJ, situação fiscal e documentação de cada fornecedor, gera um score de aderência tributária e monitora mudanças todos os dias — antes que a Receita olhe para você."),
               h("div", { className:"mt-9 flex flex-wrap justify-center gap-3" },
                 h(Link, { to:"/cadastrar", className:"rounded-md bg-gold px-7 py-3 text-sm font-semibold text-navy hover:bg-yellow-500" }, "Começar grátis"),
-                h(Link, { to:"/diretorio", className:"rounded-md border border-white/15 px-7 py-3 text-sm text-slate-200 hover:border-gold/50 hover:text-gold" }, "Ver o diretório"))),
+                h(Link, { to:"/diretorio", className:"rounded-md border border-white/15 px-7 py-3 text-sm text-slate-200 hover:border-gold/50 hover:text-gold" }, "Ver o diretório")),
+              h("p", { className:"mt-5 text-sm text-slate-400" }, "É fornecedor? ", h(Link, { to:"/cadastrar?perfil=fornecedor", className:"font-semibold text-gold hover:underline" }, "Cadastre sua empresa no diretório verificado"))),
             h("div", { className:"mx-auto max-w-4xl px-4 pb-14" },
               h(DiagnosticoLead)),
             h("div", { className:"mx-auto grid max-w-4xl grid-cols-2 gap-2.5 px-4 pb-20 md:grid-cols-4" },
@@ -1027,7 +1030,7 @@
         const [step,setStep]=useState(1);
         const [loading,setLoading]=useState(false);
         const [done,setDone]=useState(null);
-        const [form,setForm]=useState({ cnpj:"", razao_social:"", nome_fantasia:"", telefone:"", segmento:"Serviços", nome:"", email:"", password:"", confirm:"", cargo:"CEO/Diretor", plano:params.get("plano")||"free", aceite:false });
+        const [form,setForm]=useState({ perfil:params.get("perfil")==="fornecedor"?"fornecedor":"contratante", cnpj:"", razao_social:"", nome_fantasia:"", telefone:"", segmento:"Serviços", nome:"", email:"", password:"", confirm:"", cargo:"CEO/Diretor", plano:params.get("plano")||"free", aceite:false });
         const update=(k,v)=>setForm(f=>({...f,[k]:v}));
         // Erros inline por campo, exibidos depois que o usuário sai do campo
         // (antes os erros apareciam só como toast no canto da tela).
@@ -1071,7 +1074,7 @@
           if (step < 3) return next();
           for (const s of [1,2,3]) { const err = stepError(s); if (err) { setStep(s); return toast(err, "error"); } }
           setLoading(true);
-          const pending = { email:form.email, nome:form.nome, cnpj:cleanCnpj(form.cnpj), razao_social:form.razao_social, nome_fantasia:form.nome_fantasia, telefone:form.telefone, segmento:form.segmento, plano:form.plano, _savedAt: Date.now() };
+          const pending = { email:form.email, nome:form.nome, perfil:form.perfil, cnpj:cleanCnpj(form.cnpj), razao_social:form.razao_social, nome_fantasia:form.nome_fantasia, telefone:form.telefone, segmento:form.segmento, plano:form.plano, _savedAt: Date.now() };
           localStorage.setItem(PENDING_KEY, JSON.stringify(pending));
           const { data: authData, error: authError } = await supabase.auth.signUp({
             email:form.email, password:form.password,
@@ -1084,7 +1087,7 @@
             await completeSetup(authData.user, pending);
             setLoading(false);
             toast("Conta criada com sucesso!");
-            window.__route.nav("/painel");
+            window.__route.nav(form.perfil === "fornecedor" ? "/documentos" : "/painel");
           } else {
             setLoading(false);
             setDone("confirm");
@@ -1105,6 +1108,11 @@
             h("div",{className:`h-2 rounded-full ${step>i?"bg-brand":"bg-slate-200"}`}),
             h("p",{className:`mt-1 text-center text-[10px] uppercase tracking-wider ${step===i+1?"font-bold text-gold":"text-slate-400"}`},s)))),
           h("form",{onSubmit:submit,className:"mt-8 space-y-5"},
+            step===1 && h("div",{className:"mb-1 grid gap-3 md:grid-cols-2"},
+              [["contratante","Quero avaliar fornecedores","Sou contratante: monto minha carteira e monitoro a conformidade de quem contrato."],
+               ["fornecedor","Sou fornecedor","Quero ser avaliado, enviar meus documentos e entrar no diretório verificado."]].map(([id,t,d])=>
+                h("button",{type:"button",key:id,onClick:()=>update("perfil",id),className:`rounded-xl border p-4 text-left ${form.perfil===id?"border-brand ring-2 ring-brand/20":"border-slate-200"}`},
+                  h("strong",null,t),h("p",{className:"mt-1 text-xs text-slate-500"},d)))),
             step===1 && h("div",{className:"grid gap-4 md:grid-cols-2"},
               h(Field,{label:"CNPJ",hint:"Preenchemos a razão social automaticamente.",error:fieldError("cnpj")},h(Input,{value:form.cnpj,onBlur:()=>{touch("cnpj");enrich();},onChange:e=>update("cnpj",formatCnpj(e.target.value)),required:true,inputMode:"numeric",placeholder:"00.000.000/0000-00"})),
               h(Field,{label:"Razão Social",error:fieldError("razao_social")},h(Input,{value:form.razao_social,onBlur:()=>touch("razao_social"),onChange:e=>update("razao_social",e.target.value),required:true})),
@@ -1242,6 +1250,8 @@
         const plan = profile?.plan || "free";
         return h(PrivateLayout,null,
           h("h1",{className:"font-serif text-3xl font-black"},"Visão Geral"),
+          profile?.role==="supplier" && company && !company.listed && h(Notice,{tone:"gold",className:"mt-4"},
+            h("span",null,"Sua empresa ainda não está no diretório público. ",h(Link,{to:"/documentos",className:"font-bold text-gold hover:underline"},"Envie os documentos obrigatórios")," para a análise da equipe Crivo.")),
           h("div",{className:"mt-5 grid gap-5 md:grid-cols-4"},
             h(Card,null,h("p",{className:"text-sm text-slate-500"},"Plano"),h("p",{className:"mt-2 text-2xl font-black capitalize"},plan),plan==="free"&&h(Link,{to:"/planos",className:"text-sm font-bold text-brand"},"Fazer upgrade →")),
             ...[["Fornecedores monitorados",items.length],["Alto risco (score < 600)",high],["Alertas ativos",alerts.length]].map(([a,b])=>h(Card,{key:a},h("p",{className:"text-sm text-slate-500"},a),h("p",{className:"mt-2 text-2xl font-black"},h(CountUp,{value:b,duration:600}))))),
@@ -1381,8 +1391,8 @@
             h("p",{className:"mt-2 text-sm text-slate-500"},"A documentação enviada compõe a dimensão \"Documentação Fiscal\" do Score Crivo. Formatos aceitos: PDF, XML, JPG, PNG (até 10MB)."),
             company && h(Notice,{tone:company.listed?"success":"info",className:"mt-4"},
               company.listed
-                ? h("span",{className:"flex items-start gap-2"},h(Icon,{name:"check",size:14,className:"mt-0.5"}),"Sua empresa está publicada no diretório Crivo, visível para contratantes.")
-                : "Sua empresa ainda não aparece no diretório público. Envie todos os documentos obrigatórios — após análise da equipe Crivo, seu perfil será publicado."),
+                ? h("span",{className:"flex items-start gap-2"},h(Icon,{name:"check",size:14,className:"mt-0.5"}),h("span",null,"Sua empresa está publicada no diretório Crivo, visível para contratantes. ",h(Link,{to:`/empresa/${cleanCnpj(company.cnpj)}`,className:"font-bold text-gold hover:underline"},"Ver minha página pública")))
+                : h("span",null,"Sua empresa ainda não aparece no diretório público. Envie todos os documentos obrigatórios — após análise da equipe Crivo, seu perfil será publicado. ",h(Link,{to:`/empresa/${cleanCnpj(company.cnpj)}`,className:"font-bold text-gold hover:underline"},"Pré-visualizar minha página"))),
             requiredMissing.length>0 && h(Notice,{tone:"warning",className:"mt-4"},
               h("strong",null,"Para elevar o score, envie: "),requiredMissing.join(", ")),
             h("form",{onSubmit:upload,className:"mt-6 grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end"},
@@ -1525,6 +1535,92 @@
                   h(Field,{label:"Nova senha",hint:"Mínimo de 8 caracteres."},h(PasswordInput,{value:pw,onChange:e=>setPw(e.target.value),required:true,autoComplete:"new-password"}),h(PasswordStrength,{value:pw})),
                   h(Field,{label:"Confirmar nova senha",error:pw2&&pw!==pw2?"As senhas não conferem.":null},h(PasswordInput,{value:pw2,onChange:e=>setPw2(e.target.value),required:true,autoComplete:"new-password"})),
                   h(Button,{type:"submit",disabled:saving,className:"w-full"},saving?"Salvando...":"Salvar nova senha"))))));
+      }
+
+      // ---------- Página pública da empresa (/empresa/:cnpj) ----------
+      function CompanyPage() {
+        const { session, company: myCompany } = useAuth();
+        const path = window.__route.path;
+        const cnpj = cleanCnpj(decodeURIComponent(path.split("/")[2] || ""));
+        const [company, setCompany] = useState(null);
+        const [score, setScore] = useState(null);
+        const [state, setState] = useState("loading");
+        const [adding, setAdding] = useState(false);
+        useEffect(() => {
+          (async () => {
+            if (cnpj.length !== 14) { setState("notfound"); return; }
+            // RLS decide o que aparece: visitante só enxerga empresas listadas;
+            // membro da empresa enxerga a própria mesmo sem publicar (pré-visualização).
+            const { data } = await supabase.from("companies").select("*, scores(*)").eq("cnpj", cnpj).maybeSingle();
+            if (!data) { setState("notfound"); return; }
+            const latest = Array.isArray(data.scores) ? [...data.scores].sort((a, b) => Date.parse(b.calculated_at) - Date.parse(a.calculated_at))[0] : null;
+            setCompany(data); setScore(latest); setState("ok");
+            document.title = `${data.razao_social} · Crivo`;
+          })();
+          return () => { document.title = "Crivo · Inteligência Fiscal de Fornecedores"; };
+        }, [cnpj]);
+        async function share() {
+          try {
+            await navigator.clipboard.writeText(`${location.origin}/empresa/${cnpj}`);
+            toast("Link copiado. Compartilhe o perfil verificado.");
+          } catch { toast("Não foi possível copiar o link.", "error"); }
+        }
+        async function addToPortfolio() {
+          if (!session || !myCompany) return window.__route.nav("/cadastrar");
+          setAdding(true);
+          const { error } = await supabase.from("portfolios").insert({ buyer_id: myCompany.id, supplier_id: company.id, added_by: session.user.id, status: "active" });
+          setAdding(false);
+          if (error) return toast(error.message.includes("duplicate") ? "Este fornecedor já está na sua carteira." : translateError(error.message), "error");
+          toast("Fornecedor adicionado à carteira.");
+        }
+        if (state === "loading") return h(PublicLayout, null, h("main", { className:"mx-auto max-w-3xl px-4 py-16" },
+          h("div", { className:"skel h-8 w-2/3" }), h("div", { className:"skel mt-3 h-4 w-1/3" }), h("div", { className:"skel mt-8 h-40 w-full" })));
+        if (state === "notfound") return h(PublicLayout, null, h("main", { className:"mx-auto max-w-xl px-4 py-24 text-center" },
+          h("h1", { className:"font-serif text-3xl font-black" }, "Empresa não encontrada no diretório"),
+          h("p", { className:"mt-3 text-sm text-slate-500" }, "Este CNPJ ainda não tem perfil público no Crivo — ou o endereço está incorreto."),
+          h("div", { className:"mt-6 flex flex-wrap justify-center gap-3" },
+            h(Link, { to:`/diretorio${cnpj.length === 14 ? `?cnpj=${cnpj}` : ""}`, className:"rounded-lg bg-gold px-5 py-2 font-bold text-navy" }, "Buscar no diretório"),
+            h(Link, { to:"/cadastrar?perfil=fornecedor", className:"rounded-lg border px-5 py-2 text-sm" }, "Sou esta empresa — quero me cadastrar"))));
+        const rr = risk(score?.total);
+        const anos = company.data_abertura ? Math.floor((Date.now() - Date.parse(company.data_abertura)) / (365.25 * 86400000)) : null;
+        const socios = Array.isArray(company.socios) ? company.socios : [];
+        return h(PublicLayout, null, h("main", { className:"mx-auto max-w-3xl px-4 py-12" },
+          !company.listed && h(Notice, { tone:"warning", className:"mb-6" }, "Esta página ainda não está publicada no diretório — somente a sua equipe consegue vê-la. Ela fica pública após a aprovação da equipe Crivo."),
+          h("p", { className:"mono-label flex items-center gap-1.5 text-gold" }, h(Icon, { name:"check", size:11 }), company.listed ? "Perfil verificado · Diretório Crivo" : "Pré-visualização do perfil"),
+          h("div", { className:"mt-2 flex flex-wrap items-start justify-between gap-3" },
+            h("div", null,
+              h("h1", { className:"font-serif text-4xl font-black" }, company.razao_social),
+              h("p", { className:"mt-1 text-sm text-slate-400" }, formatCnpj(company.cnpj))),
+            h("button", { onClick:share, className:"inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-white/10" }, h(Icon, { name:"share", size:14 }), "Copiar link")),
+          h("div", { className:"mt-4 flex flex-wrap gap-2 text-xs" },
+            [REGIME_LABEL[company.regime] || company.regime, company.segmento, [company.municipio, company.estado].filter(Boolean).join("/"), anos !== null && `${anos} anos de atividade`]
+              .filter(Boolean).map((x) => h("span", { key:String(x), className:"rounded-full bg-white/10 px-3 py-1" }, x)),
+            company.situacao_rfb && h("span", { className:`rounded-full px-3 py-1 font-bold ${company.situacao_rfb === "ativa" ? "bg-success/20 text-success" : "bg-danger/20 text-danger"}` }, `RFB: ${company.situacao_rfb}`),
+            company.selo_active && h("span", { className:"rounded-full border border-gold/50 bg-yellow-50 px-3 py-1 font-bold text-gold" }, "Selo Crivo")),
+          score
+            ? h(Card, { className:"mt-8" },
+                h("div", { className:"flex items-end justify-between" },
+                  h("div", null,
+                    h("p", { className:"mono-label text-slate-400" }, `Score Crivo ${score.version || "v2"}`),
+                    h("p", { className:`font-serif text-6xl font-black ${rr.text}` }, h(CountUp, { value: score.total }))),
+                  h("span", { className:`rounded-full px-3 py-1 text-xs font-bold ${rr.soft} ${rr.text}` }, rr.label)),
+                h("div", { className:"scorebar mt-3 h-2 rounded-full bg-slate-100" },
+                  h("span", { className:`block h-2 rounded-full ${rr.fill}`, style:{ width:`${Math.min(score.total / 10, 100)}%` } })),
+                h("p", { className:"mt-2 text-xs text-slate-500" }, `Calculado em ${new Date(score.calculated_at).toLocaleString("pt-BR")}`),
+                h("div", { className:"mt-4" }, h(RiskBanner, { total: score.total })),
+                h(ScoreBreakdown, { score }),
+                socios.length > 0 && h("p", { className:"mt-4 text-xs text-slate-500" }, `Quadro societário: ${socios.length} sócio${socios.length > 1 ? "s" : ""} identificado${socios.length > 1 ? "s" : ""} via Receita Federal (detalhes disponíveis para contas Crivo).`),
+                h(ScoreDisclaimer))
+            : h(Card, { className:"mt-8" },
+                h("p", { className:"text-sm text-slate-500" }, "Esta empresa ainda não tem score calculado."),
+                h(ScoreDisclaimer)),
+          h(Card, { className:"gold-panel mt-6" },
+            h("h2", { className:"font-serif text-xl font-bold" }, session ? "Monitore este fornecedor" : "Avalie fornecedores antes de contratar"),
+            h("p", { className:"mt-1 text-sm text-slate-400" }, session ? "Adicione à sua carteira para receber alertas de mudança fiscal e queda de score." : "Crie uma conta gratuita para monitorar este e outros fornecedores com alertas diários."),
+            h("div", { className:"mt-4 flex flex-wrap gap-2" },
+              session && myCompany && company.id !== myCompany.id && h(Button, { onClick:addToPortfolio, disabled:adding }, adding ? "Adicionando..." : "Adicionar à carteira"),
+              !session && h(Link, { to:"/cadastrar", className:"rounded-lg bg-gold px-5 py-2 text-sm font-bold text-navy" }, "Criar conta grátis"),
+              h(Link, { to:"/diretorio", className:"rounded-lg border px-5 py-2 text-sm" }, "Ver diretório completo")))));
       }
 
       // ---------- Administração (curadoria do diretório) ----------
@@ -1746,6 +1842,7 @@
           "/auth/callback": AuthCallback,
         };
         const privateMap = { "/painel":Painel, "/dashboard":Dashboard, "/documentos":Documents, "/admin":AdminPage };
+        if (path.startsWith("/empresa/")) return h(AuthProvider,null,h(Toasts),h("div",{key:path,className:"page-enter"},h(CompanyPage)));
         if (privateMap[path]) return h(AuthProvider,null,h(Toasts),h(Protected,null,h("div",{key:path,className:"page-enter"},h(privateMap[path]))));
         const Page = publicMap[path] || NotFound;
         return h(AuthProvider,null,h(Toasts),h("div",{key:path,className:"page-enter"},h(Page)));
