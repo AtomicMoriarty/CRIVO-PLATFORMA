@@ -9,3 +9,17 @@ supabase/.temp/
 # Misc
 node_modules/
 .DS_Store
+
+# King Context
+.king-context/core/
+.king-context/docs/
+.king-context/decisions/
+.king-context/research/
+.king-context/data/
+.king-context/_temp/
+.king-context/_learned/
+
+# Claude Code (configuração pessoal/local não vai para o git)
+.claude/settings.local.json
+__pycache__/
+*.pyc
