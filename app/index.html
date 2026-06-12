@@ -366,9 +366,9 @@
         return h("div", { className:"fixed right-4 top-4 z-[60] space-y-2", role:"status", "aria-live":"polite" }, items.map((i) =>
           h("div", { key:i.id, className:"toast-in flex items-start gap-2 rounded-lg border px-4 py-3 text-sm max-w-sm shadow-lg",
             style:{ background:"var(--ink2)", borderColor:i.type === "error" ? "rgba(224,82,82,.55)" : "var(--gold-bd2)", color:i.type === "error" ? "#F07070" : "var(--gold3)" } },
-            h("span", { className:"font-bold" }, i.type === "error" ? "✕" : "✓"),
+            h(Icon, { name:i.type === "error" ? "x" : "check", size:15, className:"mt-0.5" }),
             h("span", { className:"flex-1" }, i.message),
-            h("button", { onClick:()=>setItems((x)=>x.filter((t)=>t.id!==i.id)), "aria-label":"Fechar aviso", className:"ml-1 shrink-0 font-bold opacity-60 hover:opacity-100" }, "✕"))
+            h("button", { onClick:()=>setItems((x)=>x.filter((t)=>t.id!==i.id)), "aria-label":"Fechar aviso", className:"-m-1 shrink-0 p-1 opacity-60 hover:opacity-100" }, h(Icon, { name:"x", size:13 })))
         ));
       }
       function Link({ to, children, className, onClick }) {
@@ -388,10 +388,25 @@
           error && h("span", { className:"mt-1 block text-xs text-danger" }, error));
       }
       function Input(props) { return h("input", { ...props, className:`w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-brand ${props.className || ""}` }); }
+      function PasswordInput(props) {
+        const [show, setShow] = useState(false);
+        return h("div", { className:"relative" },
+          h(Input, { ...props, type:show ? "text" : "password", className:`pr-11 ${props.className || ""}` }),
+          h("button", { type:"button", onClick:()=>setShow(!show), "aria-label":show ? "Ocultar senha" : "Mostrar senha", className:"absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-gold" },
+            h(Icon, { name:show ? "eyeOff" : "eye", size:16 })));
+      }
+      function PasswordStrength({ value }) {
+        if (!value) return null;
+        const score = [value.length >= 8, /[a-z]/.test(value) && /[A-Z]/.test(value), /\d/.test(value), /[^A-Za-z0-9]/.test(value)].filter(Boolean).length;
+        const cfg = [["Muito fraca","bg-danger"],["Fraca","bg-danger"],["Razoável","bg-warning"],["Boa","bg-gold"],["Forte","bg-success"]][score];
+        return h("div", { className:"mt-1.5" },
+          h("div", { className:"flex gap-1" }, [1,2,3,4].map((i)=>h("span",{key:i,className:`h-1 flex-1 rounded-full ${i <= score ? cfg[1] : "bg-slate-200"}`}))),
+          h("p", { className:"mt-1 text-xs text-slate-500" }, `Força da senha: ${cfg[0]}`));
+      }
       function Select(props) { return h("select", { ...props, className:"w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-brand" }, props.children); }
       function SuccessPanel({ title, message, action }) {
         return h("div", { className:"fade-in rounded-xl border border-gold/40 bg-white p-8 text-center" },
-          h("div", { className:"mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-success text-2xl font-black text-white" }, "✓"),
+          h("div", { className:"mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-success text-white" }, h(Icon, { name:"check", size:26 })),
           h("h3", { className:"font-serif text-2xl font-black" }, title),
           h("p", { className:"mt-2 text-sm text-slate-600" }, message),
           action);
@@ -486,11 +501,30 @@
       function NavIcon({ d }) {
         return h("svg", { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round", className: "shrink-0", "aria-hidden": true }, h("path", { d }));
       }
+      // Ícones SVG monocromáticos (traço 2px, 24x24) — substituem emojis/glifos
+      // unicode, que mudam de aparência por sistema e quebram o tom profissional.
+      const ICONS = {
+        check: ["M20 6L9 17l-5-5"],
+        x: ["M18 6L6 18", "M6 6l12 12"],
+        warn: ["M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z", "M12 9v4", "M12 17h.01"],
+        menu: ["M3 12h18", "M3 6h18", "M3 18h18"],
+        star: ["M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"],
+        clock: ["M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z", "M12 6v6l4 2"],
+        eye: ["M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z", "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"],
+        eyeOff: ["M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94", "M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19", "M14.12 14.12a3 3 0 1 1-4.24-4.24", "M1 1l22 22"],
+        share: ["M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8", "M16 6l-4-4-4 4", "M12 2v13"],
+      };
+      function Icon({ name, size = 16, className = "" }) {
+        const paths = ICONS[name];
+        if (!paths) return null;
+        return h("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round", className: `inline-block shrink-0 ${className}`, "aria-hidden": true },
+          paths.map((d, i) => h("path", { key: i, d })));
+      }
 
       // ---------- Score: disclaimer obrigatório + breakdown ----------
       function ScoreDisclaimer() {
         return h("div", { className:"mt-4 flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500" },
-          h("span", { className:"mt-0.5 text-warning" }, "⚠"),
+          h(Icon, { name:"warn", size:14, className:"mt-0.5 text-warning" }),
           h("span", null,
             h("strong", null, "Score Crivo"),
             " é um indicador estatístico de aderência tributária. Não constitui parecer jurídico, não garante aproveitamento de crédito CBS/IBS e não substitui análise por contador ou advogado tributarista. Dados obtidos de fontes públicas e documentos fornecidos pelo prestador."));
@@ -498,11 +532,12 @@
       function RiskBanner({ total }) {
         const n = Number(total || 0);
         const cfg = n >= 800
-          ? { cls:"border-success/40 text-success", msg:"✓ Conformidade Excelente — alto potencial de aproveitamento de crédito CBS/IBS" }
+          ? { cls:"border-success/40 text-success", icon:"check", msg:"Conformidade Excelente — alto potencial de aproveitamento de crédito CBS/IBS" }
           : n >= 600
-          ? { cls:"border-warning/40 text-warning", msg:"⚠ Conformidade Moderada — revise os itens sinalizados antes de contratar" }
-          : { cls:"border-danger/40 text-danger", msg:"✗ Atenção — risco elevado de glosa de crédito. Consulte seu contador." };
-        return h("div", { className:`rounded-lg border bg-white p-3 text-sm font-semibold ${cfg.cls}` }, cfg.msg);
+          ? { cls:"border-warning/40 text-warning", icon:"warn", msg:"Conformidade Moderada — revise os itens sinalizados antes de contratar" }
+          : { cls:"border-danger/40 text-danger", icon:"x", msg:"Atenção — risco elevado de glosa de crédito. Consulte seu contador." };
+        return h("div", { className:`flex items-start gap-2 rounded-lg border bg-white p-3 text-sm font-semibold ${cfg.cls}` },
+          h(Icon, { name:cfg.icon, size:15, className:"mt-0.5" }), h("span", null, cfg.msg));
       }
       function ScoreBreakdown({ score }) {
         const explanation = score?.explanation || {};
@@ -554,7 +589,7 @@
                 h("p", { className:"mono-label text-gold" }, "Know Your Provider"),
                 h("h2", { id:"kyp-title", className:"mt-1 font-serif text-3xl font-black" }, info?.razao_social || "Empresa"),
                 h("p", { className:"mt-1 text-sm text-slate-400" }, formatCnpj(info?.cnpj))),
-              h("button", { onClick:onClose, "aria-label":"Fechar", className:"rounded-lg border px-3 py-1 text-sm hover:bg-white/10" }, "✕")),
+              h("button", { onClick:onClose, "aria-label":"Fechar", className:"rounded-lg border px-3 py-2 text-sm hover:bg-white/10" }, h(Icon, { name:"x", size:14 }))),
             h("div", { className:"mt-4 flex flex-wrap gap-2 text-xs" },
               [REGIME_LABEL[info?.regime] || info?.regime, info?.segmento, [info?.municipio, info?.estado].filter(Boolean).join("/"), anos !== null && `${anos} anos de atividade`]
                 .filter(Boolean).map((x) => h("span", { key:String(x), className:"rounded-full bg-white/10 px-3 py-1" }, x)),
@@ -605,11 +640,11 @@
                 ...navLinks.map(([to, label]) => h(Link, { key:to, to, className:"hover:text-brand" }, label)),
                 session && h("button", { onClick:signOut, className:"text-slate-500 hover:text-danger" }, "Sair"),
                 h(Link, { to:cta[0], className:"rounded-lg bg-gold px-4 py-2 font-bold text-navy hover:bg-yellow-500" }, cta[1])),
-              h("button", { className:"rounded-lg border px-3 py-2 text-sm md:hidden", "aria-label":menu?"Fechar menu":"Abrir menu", "aria-expanded":menu, "aria-controls":"mobile-nav", onClick:()=>setMenu(!menu) }, menu ? "✕" : "☰")),
+              h("button", { className:"rounded-lg border px-3 py-2.5 text-sm md:hidden", "aria-label":menu?"Fechar menu":"Abrir menu", "aria-expanded":menu, "aria-controls":"mobile-nav", onClick:()=>setMenu(!menu) }, h(Icon, { name:menu ? "x" : "menu", size:18 }))),
             menu && h("nav", { id:"mobile-nav", className:"fade-in border-t border-slate-200 glass px-4 py-3 md:hidden" },
-              ...navLinks.map(([to, label]) => h(Link, { key:to, to, onClick:()=>setMenu(false), className:"block rounded-lg px-3 py-2 text-sm font-medium hover:bg-white/10" }, label)),
-              session && h("button", { onClick:()=>{ setMenu(false); signOut(); }, className:"block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-500" }, "Sair"),
-              h(Link, { to:cta[0], onClick:()=>setMenu(false), className:"mt-2 block rounded-lg bg-gold px-3 py-2 text-center font-bold text-navy" }, cta[1]))),
+              ...navLinks.map(([to, label]) => h(Link, { key:to, to, onClick:()=>setMenu(false), className:"block rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-white/10" }, label)),
+              session && h("button", { onClick:()=>{ setMenu(false); signOut(); }, className:"block w-full rounded-lg px-3 py-2.5 text-left text-sm text-slate-500" }, "Sair"),
+              h(Link, { to:cta[0], onClick:()=>setMenu(false), className:"mt-2 block rounded-lg bg-gold px-3 py-2.5 text-center font-bold text-navy" }, cta[1]))),
           ...childList(children),
           h(Footer));
       }
@@ -672,21 +707,22 @@
                 h("div", { key:n, className:"card-lift rounded-lg border border-white/10 bg-white/[.03] p-4 text-center" },
                   h("p", { className:"font-serif text-2xl font-bold", style:{ color:"var(--gold2)" } }, n),
                   h("p", { className:"mt-1.5 text-[11px] leading-snug text-slate-400" }, t))))),
-          h(HowItWorks), h(CreditCompare), h(PlansSection), h(AccountantLead));
+          h(HowItWorks), h(CreditCompare), h(Methodology), h(PlansSection), h(AccountantLead));
       }
       function DiagnosticoLead() {
         const [f,setF]=useState({nome:"",email:"",empresa:""});
         const [loading,setLoading]=useState(false);
         const [sent,setSent]=useState(false);
-        const u=(k,v)=>setF(x=>({...x,[k]:v}));
+        const [err,setErr]=useState(null);
+        const u=(k,v)=>{ setErr(null); setF(x=>({...x,[k]:v})); };
         async function submit(e){
           e.preventDefault();
-          if(!f.nome.trim()) return toast("Preencha seu nome.","error");
-          if(!/^\S+@\S+\.\S+$/.test(f.email)) return toast("Digite um e-mail válido.","error");
-          if(!f.empresa.trim()) return toast("Informe o nome da empresa.","error");
+          if(!f.nome.trim()) return setErr("Preencha seu nome.");
+          if(!/^\S+@\S+\.\S+$/.test(f.email)) return setErr("Digite um e-mail válido.");
+          if(!f.empresa.trim()) return setErr("Informe o nome da empresa.");
           setLoading(true);
           const { error } = await supabase.from("leads").insert({ tipo:"diagnostico", source:"diagnostico", nome:f.nome, email:f.email, empresa:f.empresa, origem:"landing_diagnostico", status:"novo" });
-          supabase.functions.invoke("send-email",{ body:{ tipo:"diagnostico", email:f.email, nome:f.nome, subject:"✓ Diagnóstico solicitado — Crivo", body:"Recebemos sua solicitação de diagnóstico da Reforma Tributária. Nossa equipe entrará em contato em até 2 dias úteis." } }).catch(logFail("e-mail de diagnóstico"));
+          supabase.functions.invoke("send-email",{ body:{ tipo:"diagnostico", email:f.email, nome:f.nome, subject:"Diagnóstico solicitado — Crivo", body:"Recebemos sua solicitação de diagnóstico da Reforma Tributária. Nossa equipe entrará em contato em até 2 dias úteis." } }).catch(logFail("e-mail de diagnóstico"));
           setLoading(false);
           if(error) return toast(translateError(error.message),"error");
           setSent(true);
@@ -694,12 +730,12 @@
         return h("div",{className:"gold-panel rounded-xl border p-7"},
               sent
                 ? h("div",{className:"fade-in py-4 text-center"},
-                    h("div",{className:"mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-success text-xl font-black text-white"},"✓"),
+                    h("div",{className:"mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-success text-white"},h(Icon,{name:"check",size:22})),
                     h("h2",{className:"font-serif text-2xl font-bold"},"Diagnóstico solicitado!"),
                     h("p",{className:"mt-2 text-sm text-slate-400"},`Recebemos seus dados, ${f.nome.split(" ")[0]}. Nossa equipe retorna em até 2 dias úteis no e-mail informado.`),
                     h("p",{className:"mono-label mt-4 text-slate-500"},"Porto & Pacca Advogados · Adeke Adequação Corporativa"))
                 : h(React.Fragment,null,
-                    h("p",{className:"mono-label text-gold"},"★ Gratuito · sem compromisso"),
+                    h("p",{className:"mono-label flex items-center gap-1.5 text-gold"},h(Icon,{name:"star",size:11}),"Gratuito · sem compromisso"),
                     h("h2",{className:"mt-2 font-serif text-2xl font-bold"},"Diagnóstico da Reforma Tributária para sua empresa"),
                     h("p",{className:"mt-1 max-w-lg text-sm text-slate-400"},"Preencha o formulário e nossa equipe mapeia seus riscos e oportunidades em CBS/IBS — incluindo a análise da sua cadeia de fornecedores."),
                     h("form",{onSubmit:submit,className:"mt-5 grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto]"},
@@ -707,6 +743,7 @@
                       h(Input,{type:"email",value:f.email,onChange:e=>u("email",e.target.value),placeholder:"E-mail *","aria-label":"E-mail"}),
                       h(Input,{value:f.empresa,onChange:e=>u("empresa",e.target.value),placeholder:"Empresa *","aria-label":"Empresa"}),
                       h(Button,{type:"submit",disabled:loading},loading?"Enviando...":"Quero meu diagnóstico →")),
+                    err && h("p",{className:"mt-2 text-xs font-semibold text-danger",role:"alert"},err),
                     h("p",{className:"mono-label mt-4 text-slate-500"},"Porto & Pacca Advogados · Adeke Adequação Corporativa · Retorno em até 2 dias úteis")));
       }
       function CreditCompare() {
@@ -724,6 +761,36 @@
               h("p", { className:"mt-3 font-serif text-5xl font-black text-danger" }, "~R$ 3 mil"),
               h("p", { className:"mt-2 text-sm text-slate-600" }, "o fornecedor mais \"barato\" na nota pode sair R$ 25 mil mais caro na carga tributária efetiva.")))),
           h("p", { className:"mt-4 text-xs text-slate-500" }, "Valores ilustrativos com base nas alíquotas de referência estimadas da LC 214/2025. O aproveitamento real depende da operação — o Crivo indica o potencial, não garante o crédito.")));
+      }
+      // Pesos reais das dimensões (espelham calculate-score). Se o cálculo mudar
+      // na edge function, atualizar aqui também.
+      const DIM_WEIGHTS = { regularidade:35, regime_cnae:30, documentacao:15, consistencia:10, contencioso:5, societario:3, retencoes:2 };
+      function Methodology() {
+        return h("section", { className:"border-y border-white/5" }, h("div", { className:"mx-auto max-w-7xl px-4 py-16" },
+          h(Reveal, null,
+            h("h2", { className:"font-serif text-4xl font-black text-navy" }, "Quem assina a metodologia"),
+            h("p", { className:"mt-3 max-w-2xl text-slate-600" }, "O Score Crivo não é uma caixa-preta: cada dimensão tem fundamento legal citado e a análise é assinada por quem entende do assunto.")),
+          h("div", { className:"mt-8 grid gap-5 md:grid-cols-2" },
+            h(Reveal, null, h(Card, null,
+              h("p", { className:"mono-label text-gold" }, "Fundamento jurídico"),
+              h("h3", { className:"mt-2 font-serif text-xl font-bold" }, "Porto & Pacca Advogados"),
+              h("p", { className:"mt-2 text-sm leading-relaxed text-slate-600" }, "Banca tributária responsável pelo fundamento legal da metodologia — cada dimensão do score cita o artigo da LC 214/2025 que a sustenta."))),
+            h(Reveal, { delay:120 }, h(Card, null,
+              h("p", { className:"mono-label text-gold" }, "Produto e operação"),
+              h("h3", { className:"mt-2 font-serif text-xl font-bold" }, "Adeke Adequação Corporativa"),
+              h("p", { className:"mt-2 text-sm leading-relaxed text-slate-600" }, "Conduz a curadoria do diretório, a análise documental e o monitoramento diário — nenhuma empresa entra no diretório sem revisão da equipe.")))),
+          h(Reveal, null, h(Card, { className:"mt-8" },
+            h("h3", { className:"font-serif text-xl font-bold" }, "Como o Score Crivo é calculado"),
+            h("p", { className:"mt-2 text-sm text-slate-600" }, "Sete dimensões ponderadas, de 0 a 1000. Você vê a nota e o porquê de cada uma — incluindo a fonte do dado e o artigo de lei aplicável."),
+            h("div", { className:"mt-5 space-y-3" }, DIM_META.map(([, key, name, fundamento]) => {
+              const w = DIM_WEIGHTS[key] || 0;
+              return h("div", { key, className:"grid items-center gap-2 md:grid-cols-[220px_1fr_auto]" },
+                h("span", { className:"text-sm font-semibold" }, name),
+                h("div", { className:"h-1.5 rounded-full bg-slate-100" },
+                  h("span", { className:"block h-1.5 rounded-full bg-gold", style:{ width:`${w}%` } })),
+                h("span", { className:"mono-label text-slate-500" }, `${w}%${fundamento ? ` · ${fundamento}` : ""}`));
+            })),
+            h(ScoreDisclaimer)))));
       }
       function HowItWorks() {
         return h("section", { className:"mx-auto max-w-7xl px-4 py-16" },
@@ -769,7 +836,7 @@
             h("p",{className:"mono-label text-slate-500"},{free:"Gratuito",pro:"Profissional",premium:"Completo"}[id]),
             h("h3",{className:"mt-1 font-serif text-2xl font-bold"},name),
             h("p",{className:"mt-4 font-serif text-4xl font-black",style:{color:"var(--gold2)"}}, price ? money.format(price) : "R$ 0", h("span",{className:"font-sans text-sm font-normal text-slate-500"}," /mês")),
-            h("ul",{className:"mt-5 space-y-1.5 border-t border-white/10 pt-4"},items.map(it=>h("li",{key:it,className:"flex items-start gap-2 text-sm text-slate-600"},h("span",{className:"mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-gold/15 text-[8px] font-bold text-gold"},"✓"),it))),
+            h("ul",{className:"mt-5 space-y-1.5 border-t border-white/10 pt-4"},items.map(it=>h("li",{key:it,className:"flex items-start gap-2 text-sm text-slate-600"},h("span",{className:"mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-gold/15 text-gold"},h(Icon,{name:"check",size:9})),it))),
             h("button",{onClick:()=>checkout(id),disabled:busy===id,className:`mt-6 inline-flex w-full justify-center rounded-md px-4 py-2.5 text-sm font-semibold disabled:opacity-50 ${id==="free"?"border border-white/15 text-slate-300 hover:border-gold/50 hover:text-gold":"bg-gold text-navy hover:bg-yellow-500"}`}, busy===id ? "Abrindo..." : price ? `Começar no ${name}` : "Criar conta grátis")))))));
       }
       function AccountantLead() {
@@ -879,7 +946,7 @@
           if (fScore && !(Number(r.score) >= 800)) return false;
           return true;
         });
-        const chipCls = (on) => `mono-label rounded border px-2.5 py-1.5 transition ${on ? "border-gold/50 bg-yellow-50 text-gold" : "border-white/15 text-slate-400 hover:border-gold/40 hover:text-gold"}`;
+        const chipCls = (on) => `mono-label inline-flex items-center rounded border px-3 py-2.5 transition md:py-1.5 ${on ? "border-gold/50 bg-yellow-50 text-gold" : "border-white/15 text-slate-400 hover:border-gold/40 hover:text-gold"}`;
         const Layout = session ? PrivateLayout : PublicLayout;
         return h(Layout, null, h("main",{className:"mx-auto max-w-7xl px-4 py-12"},
           h("h1",{className:"font-serif text-4xl font-black text-navy"},"Diretório de fornecedores"),
@@ -888,7 +955,7 @@
             h(Input,{value:term,onChange:e=>setTerm(e.target.value),placeholder:"CNPJ ou razão social","aria-label":"Buscar empresa"}),
             h(Button,{type:"submit",disabled:loading,className:"md:w-40"}, loading?"Buscando...":"Buscar")),
           matches && matches.length > 0 && h("div",{className:"mt-8"},
-            h("p",{className:"mono-label text-gold"},"★ Recomendados para você"),
+            h("p",{className:"mono-label flex items-center gap-1.5 text-gold"},h(Icon,{name:"star",size:11}),"Recomendados para você"),
             h("p",{className:"mt-1 text-xs text-slate-500"},"Fornecedores compatíveis com o estado, segmento e regime tributário da sua empresa."),
             h("div",{className:"mt-3 grid gap-5 md:grid-cols-2"},matches.map((m)=>h(CompanyCard,{key:m.id,row:m,session,onView:()=>setSelected(m),onAdd:()=>addPortfolio(m)})))),
           h("div",{className:"mt-4 flex flex-wrap items-center gap-2"},
@@ -896,12 +963,12 @@
             ufs.map((uf)=>h("button",{key:uf,type:"button",onClick:()=>setFUf(fUf===uf?"":uf),className:chipCls(fUf===uf)},uf)),
             [["lucro_real","Lucro Real"],["lucro_presumido","L. Presumido"],["simples","Simples"],["mei","MEI"]].map(([v,l])=>
               h("button",{key:v,type:"button",onClick:()=>setFRegime(fRegime===v?"":v),className:chipCls(fRegime===v)},l)),
-            (fScore||fUf||fRegime) && h("button",{type:"button",onClick:()=>{setFScore(false);setFUf("");setFRegime("");},className:"mono-label px-2 py-1.5 text-slate-500 hover:text-danger"},"limpar ✕")),
+            (fScore||fUf||fRegime) && h("button",{type:"button",onClick:()=>{setFScore(false);setFUf("");setFRegime("");},className:"mono-label inline-flex items-center gap-1 px-2 py-2.5 text-slate-500 hover:text-danger md:py-1.5"},"Limpar filtros",h(Icon,{name:"x",size:11}))),
           h("p",{className:"mono-label mt-4 text-slate-500"},`${visible.length} empresa${visible.length!==1?"s":""} encontrada${visible.length!==1?"s":""}`),
           usingExamples && h(Notice,{tone:"gold",className:"mt-4 text-xs"},"Exibindo empresas de exemplo. Busque um CNPJ real para gerar a primeira análise."),
           loading && !results.length && h("div",{className:"mt-8 grid gap-5 md:grid-cols-2"},[1,2,3,4].map(i=>h(SkeletonCard,{key:i}))),
           h("div",{className:"mt-6 grid gap-5 md:grid-cols-2"},visible.map((row,i)=>h(CompanyCard,{key:row.id||row.cnpj||i,row,session,onView:()=>view(row),onAdd:()=>addPortfolio(row)}))),
-          !loading && !visible.length && h("p",{className:"mt-8 text-sm text-slate-500"},results.length?"Nenhuma empresa com esses filtros — clique em \"limpar ✕\" para ver todas.":"Nenhum resultado. Tente buscar pelo CNPJ completo."),
+          !loading && !visible.length && h("p",{className:"mt-8 text-sm text-slate-500"},results.length?"Nenhuma empresa com esses filtros — clique em \"Limpar filtros\" para ver todas.":"Nenhum resultado. Tente buscar pelo CNPJ completo."),
           !session && h(Notice,{tone:"gold",className:"mt-8"},"Crie uma conta gratuita para ver o score completo, a explicação de cada dimensão e monitorar fornecedores."),
           h(ScoreDisclaimer)),
           selected && h(KypModal,{company:selected,onClose:()=>setSelected(null),onAdd:session?addPortfolio:null}));
@@ -931,12 +998,13 @@
       // ---------- Auth ----------
       function Login() {
         const [email,setEmail]=useState(""); const [password,setPassword]=useState(""); const [loading,setLoading]=useState(false);
+        const [err,setErr]=useState(null);
         const next = new URLSearchParams(location.search).get("next") || "/painel";
         async function submit(e){
-          e.preventDefault(); setLoading(true);
+          e.preventDefault(); setErr(null); setLoading(true);
           const { error } = await supabase.auth.signInWithPassword({ email, password });
           setLoading(false);
-          if(error) return toast(translateError(error.message),"error");
+          if(error) return setErr(translateError(error.message));
           window.__route.nav(next);
         }
         async function reset(){
@@ -947,8 +1015,9 @@
         return h(PublicLayout,null,h("main",{className:"mx-auto max-w-md px-4 py-16"},h(Card,null,
           h("h1",{className:"font-serif text-4xl font-black"},"Entrar"),
           h("form",{onSubmit:submit,className:"mt-6 space-y-4"},
-            h(Field,{label:"E-mail"},h(Input,{type:"email",value:email,onChange:e=>setEmail(e.target.value),required:true,autoComplete:"email"})),
-            h(Field,{label:"Senha"},h(Input,{type:"password",value:password,onChange:e=>setPassword(e.target.value),required:true,autoComplete:"current-password"})),
+            h(Field,{label:"E-mail"},h(Input,{type:"email",value:email,onChange:e=>{setEmail(e.target.value);setErr(null);},required:true,autoComplete:"email"})),
+            h(Field,{label:"Senha"},h(PasswordInput,{value:password,onChange:e=>{setPassword(e.target.value);setErr(null);},required:true,autoComplete:"current-password"})),
+            err && h(Notice,{tone:"danger"},err),
             h(Button,{type:"submit",disabled:loading,className:"w-full"},loading?"Entrando...":"Entrar")),
           h("button",{type:"button",onClick:reset,className:"mt-4 text-sm text-brand"},"Esqueci minha senha"),
           h("p",{className:"mt-6 text-sm"},"Ainda não tem conta? ",h(Link,{to:"/cadastrar",className:"font-bold text-brand"},"Cadastre-se")))));
@@ -960,6 +1029,19 @@
         const [done,setDone]=useState(null);
         const [form,setForm]=useState({ cnpj:"", razao_social:"", nome_fantasia:"", telefone:"", segmento:"Serviços", nome:"", email:"", password:"", confirm:"", cargo:"CEO/Diretor", plano:params.get("plano")||"free", aceite:false });
         const update=(k,v)=>setForm(f=>({...f,[k]:v}));
+        // Erros inline por campo, exibidos depois que o usuário sai do campo
+        // (antes os erros apareciam só como toast no canto da tela).
+        const [touched,setTouched]=useState({});
+        const touch=(k)=>setTouched(t=>({...t,[k]:true}));
+        function fieldError(k){
+          if(!touched[k]) return null;
+          if(k==="cnpj" && form.cnpj && !validCnpj(form.cnpj)) return "CNPJ inválido — confira os dígitos.";
+          if(k==="razao_social" && !form.razao_social.trim()) return "Informe a razão social.";
+          if(k==="nome" && !form.nome.trim()) return "Informe seu nome completo.";
+          if(k==="email" && form.email && !/^\S+@\S+\.\S+$/.test(form.email)) return "Digite um e-mail válido.";
+          if(k==="password" && form.password && form.password.length<8) return "A senha precisa ter no mínimo 8 caracteres.";
+          return null;
+        }
         async function enrich(){
           if(cleanCnpj(form.cnpj).length!==14) return;
           const d=await lookupCnpj(form.cnpj).catch((err)=>{ toast(translateError(err.message),"error"); return null; });
@@ -1024,19 +1106,22 @@
             h("p",{className:`mt-1 text-center text-[10px] uppercase tracking-wider ${step===i+1?"font-bold text-gold":"text-slate-400"}`},s)))),
           h("form",{onSubmit:submit,className:"mt-8 space-y-5"},
             step===1 && h("div",{className:"grid gap-4 md:grid-cols-2"},
-              h(Field,{label:"CNPJ",hint:"Preenchemos a razão social automaticamente."},h(Input,{value:form.cnpj,onBlur:enrich,onChange:e=>update("cnpj",formatCnpj(e.target.value)),required:true,inputMode:"numeric",placeholder:"00.000.000/0000-00"})),
-              h(Field,{label:"Razão Social"},h(Input,{value:form.razao_social,onChange:e=>update("razao_social",e.target.value),required:true})),
+              h(Field,{label:"CNPJ",hint:"Preenchemos a razão social automaticamente.",error:fieldError("cnpj")},h(Input,{value:form.cnpj,onBlur:()=>{touch("cnpj");enrich();},onChange:e=>update("cnpj",formatCnpj(e.target.value)),required:true,inputMode:"numeric",placeholder:"00.000.000/0000-00"})),
+              h(Field,{label:"Razão Social",error:fieldError("razao_social")},h(Input,{value:form.razao_social,onBlur:()=>touch("razao_social"),onChange:e=>update("razao_social",e.target.value),required:true})),
               h(Field,{label:"Nome Fantasia"},h(Input,{value:form.nome_fantasia,onChange:e=>update("nome_fantasia",e.target.value)})),
               h(Field,{label:"Telefone"},h(Input,{value:form.telefone,onChange:e=>update("telefone",e.target.value),inputMode:"tel"})),
               h(Field,{label:"Segmento"},h(Select,{value:form.segmento,onChange:e=>update("segmento",e.target.value)},["Varejo","Indústria","Serviços","Construção","Agronegócio","Saúde","Tecnologia","Logística","Outro"].map(x=>h("option",{key:x},x))))),
             step===2 && h("div",{className:"grid gap-4 md:grid-cols-2"},
-              h(Field,{label:"Nome completo"},h(Input,{value:form.nome,onChange:e=>update("nome",e.target.value),required:true,autoComplete:"name"})),
-              h(Field,{label:"E-mail corporativo"},h(Input,{type:"email",value:form.email,onChange:e=>update("email",e.target.value),required:true,autoComplete:"email"})),
-              h(Field,{label:"Senha",hint:"Mínimo de 8 caracteres."},h(Input,{type:"password",value:form.password,onChange:e=>update("password",e.target.value),required:true,autoComplete:"new-password"})),
-              h(Field,{label:"Confirmar senha",error:form.confirm&&form.password!==form.confirm?"As senhas não conferem.":null},h(Input,{type:"password",value:form.confirm,onChange:e=>update("confirm",e.target.value),required:true,autoComplete:"new-password"})),
+              h(Field,{label:"Nome completo",error:fieldError("nome")},h(Input,{value:form.nome,onBlur:()=>touch("nome"),onChange:e=>update("nome",e.target.value),required:true,autoComplete:"name"})),
+              h(Field,{label:"E-mail corporativo",error:fieldError("email")},h(Input,{type:"email",value:form.email,onBlur:()=>touch("email"),onChange:e=>update("email",e.target.value),required:true,autoComplete:"email"})),
+              h(Field,{label:"Senha",hint:"Mínimo de 8 caracteres.",error:fieldError("password")},
+                h(PasswordInput,{value:form.password,onBlur:()=>touch("password"),onChange:e=>update("password",e.target.value),required:true,autoComplete:"new-password"}),
+                h(PasswordStrength,{value:form.password})),
+              h(Field,{label:"Confirmar senha",error:form.confirm&&form.password!==form.confirm?"As senhas não conferem.":null},h(PasswordInput,{value:form.confirm,onChange:e=>update("confirm",e.target.value),required:true,autoComplete:"new-password"})),
               h(Field,{label:"Cargo"},h(Select,{value:form.cargo,onChange:e=>update("cargo",e.target.value)},["CEO/Diretor","Gerente","Controller","Contador","Outro"].map(x=>h("option",{key:x},x))))),
             step===3 && h("div",null,
               h("div",{className:"grid gap-4 md:grid-cols-3"},[["free","Grátis","R$ 0"],["pro","Pro","R$ 297/mês"],["premium","Premium","R$ 897/mês"]].map(([id,n,p])=>h("button",{type:"button",key:id,onClick:()=>update("plano",id),className:`rounded-xl border p-4 text-left ${form.plano===id?"border-brand ring-2 ring-brand/20":"border-slate-200"}`},h("strong",null,n),h("p",{className:"mt-1 text-sm text-slate-500"},p)))),
+              form.plano!=="free" && h(Notice,{tone:"gold",className:"mt-4"},"A cobrança ainda não está ativa — sua conta começa no plano Grátis, sem cartão. Quando os pagamentos abrirem, você poderá ativar o plano escolhido sem refazer o cadastro."),
               h("label",{className:"mt-5 flex items-start gap-2 text-sm"},
                 h("input",{type:"checkbox",checked:form.aceite,onChange:e=>update("aceite",e.target.checked),className:"mt-1"}),
                 h("span",null,"Li e aceito os ",h(Link,{to:"/termos",className:"font-bold text-brand"},"Termos de Uso")," e a ",h(Link,{to:"/privacidade",className:"font-bold text-brand"},"Política de Privacidade"),"."))),
@@ -1057,9 +1142,10 @@
         const [sent,setSent]=useState(false);
         const u=(k,v)=>setF(x=>({...x,[k]:v}));
         const labels={nome:"Nome",email:"E-mail",empresa:"Empresa",cnpj:"CNPJ",telefone:"Telefone"};
+        const [emailErr,setEmailErr]=useState(null);
         async function submit(e){
           e.preventDefault();
-          if(!/^\S+@\S+\.\S+$/.test(f.email)) return toast("Digite um e-mail válido.","error");
+          if(!/^\S+@\S+\.\S+$/.test(f.email)) return setEmailErr("Digite um e-mail válido.");
           setLoading(true);
           const { error }=await supabase.from("leads").insert({ tipo:"proposta", source:"proposta", nome:f.nome,email:f.email,empresa:f.empresa,cnpj:cleanCnpj(f.cnpj),telefone:f.telefone,plano_interesse:f.plano,mensagem:f.mensagem,status:"novo" });
           supabase.functions.invoke("send-email",{body:{tipo:"proposta-recebida",email:f.email,nome:f.nome,subject:"Recebemos sua proposta — Crivo",body:"Recebemos sua mensagem. Nossa equipe comercial entrará em contato em até 2 dias úteis."}}).catch(logFail("e-mail de proposta recebida"));
@@ -1072,7 +1158,7 @@
             ? h(SuccessPanel,{title:"Proposta enviada!",message:"Nossa equipe comercial entrará em contato em até 2 dias úteis."})
             : h(Card,null,h("h2",{className:"font-serif text-3xl font-black"},"Falar com comercial"),
               h("form",{onSubmit:submit,className:"mt-6 grid gap-4 md:grid-cols-2"},
-                ["nome","email","empresa","cnpj","telefone"].map(k=>h(Field,{key:k,label:labels[k]},h(Input,{type:k==="email"?"email":"text",value:f[k],onChange:e=>u(k,k==="cnpj"?formatCnpj(e.target.value):e.target.value),required:k!=="telefone"}))),
+                ["nome","email","empresa","cnpj","telefone"].map(k=>h(Field,{key:k,label:labels[k],error:k==="email"?emailErr:null},h(Input,{type:k==="email"?"email":"text",value:f[k],onChange:e=>{if(k==="email")setEmailErr(null);u(k,k==="cnpj"?formatCnpj(e.target.value):e.target.value);},required:k!=="telefone"}))),
                 h(Field,{label:"Plano"},h(Select,{value:f.plano,onChange:e=>u("plano",e.target.value)},[["pro","Pro"],["premium","Premium"]].map(([v,l])=>h("option",{key:v,value:v},l)))),
                 h("textarea",{className:"md:col-span-2 rounded-lg border p-3",rows:3,placeholder:"Mensagem",value:f.mensagem,onChange:e=>u("mensagem",e.target.value)}),
                 h(Button,{type:"submit",disabled:loading,className:"md:col-span-2"},loading?"Enviando...":"Enviar proposta"))));
@@ -1169,7 +1255,23 @@
             h("h2",{className:"font-bold"},"Carteira de fornecedores"),
             items.length === 0 && loaded
               ? h("p",{className:"mt-4 text-sm text-slate-500"},"Sua carteira está vazia. Adicione o primeiro fornecedor acima para começar a monitorar a conformidade fiscal.")
-              : h("table",{className:"mt-4 w-full text-left text-sm"},
+              : h(React.Fragment,null,
+                // No celular a tabela vira lista de cards (sem scroll lateral)
+                h("div",{className:"mt-4 space-y-3 md:hidden"},items.map(i=>{
+                  const rr=risk(i.score);
+                  return h("div",{key:i.portfolio.id,className:"rounded-lg border border-slate-200 p-3"},
+                    h("div",{className:"flex items-start justify-between gap-3"},
+                      h("div",{className:"min-w-0"},
+                        h("p",{className:"truncate font-semibold"},i.razao_social),
+                        h("p",{className:"text-xs text-slate-500"},formatCnpj(i.cnpj))),
+                      i.score!==null ? h("span",{className:`shrink-0 rounded-full px-2 py-1 text-xs font-bold ${rr.soft} ${rr.text}`},Math.round(i.score)) : h("span",{className:"shrink-0 text-xs text-slate-400"},"em análise")),
+                    h("p",{className:"mt-1 text-xs text-slate-500"},[i.segmento,i.situacao_rfb||"ativa"].filter(Boolean).join(" · ")),
+                    h("div",{className:"mt-2 flex flex-wrap gap-x-5"},
+                      h("button",{onClick:()=>setSelected(i),className:"py-2 text-xs font-bold text-brand"},"Ver análise"),
+                      h("button",{onClick:()=>refreshScore(i),className:"py-2 text-xs text-slate-500"},"Atualizar"),
+                      h("button",{onClick:()=>remove(i),className:"py-2 text-xs text-danger"},"Remover")));
+                })),
+                h("table",{className:"mt-4 hidden w-full text-left text-sm md:table"},
                 h("thead",null,h("tr",{className:"border-b"},["Empresa","CNPJ","Segmento","Score","Situação","Ações"].map(x=>h("th",{key:x,className:"py-2 pr-3"},x)))),
                 h("tbody",null,items.map(i=>{
                   const rr=risk(i.score);
@@ -1183,7 +1285,7 @@
                       h("button",{onClick:()=>setSelected(i),className:"mr-2 text-xs font-bold text-brand hover:underline"},"Ver análise"),
                       h("button",{onClick:()=>refreshScore(i),className:"mr-2 text-xs text-slate-500 hover:underline"},"Atualizar"),
                       h("button",{onClick:()=>remove(i),className:"text-xs text-danger hover:underline"},"Remover")));
-                }))),
+                })))),
             h(ScoreDisclaimer)),
           h(Card,{className:"mt-6"},
             h("h2",{className:"font-bold"},"Alertas recentes"),
@@ -1279,7 +1381,7 @@
             h("p",{className:"mt-2 text-sm text-slate-500"},"A documentação enviada compõe a dimensão \"Documentação Fiscal\" do Score Crivo. Formatos aceitos: PDF, XML, JPG, PNG (até 10MB)."),
             company && h(Notice,{tone:company.listed?"success":"info",className:"mt-4"},
               company.listed
-                ? "✓ Sua empresa está publicada no diretório Crivo, visível para contratantes."
+                ? h("span",{className:"flex items-start gap-2"},h(Icon,{name:"check",size:14,className:"mt-0.5"}),"Sua empresa está publicada no diretório Crivo, visível para contratantes.")
                 : "Sua empresa ainda não aparece no diretório público. Envie todos os documentos obrigatórios — após análise da equipe Crivo, seu perfil será publicado."),
             requiredMissing.length>0 && h(Notice,{tone:"warning",className:"mt-4"},
               h("strong",null,"Para elevar o score, envie: "),requiredMissing.join(", ")),
@@ -1311,10 +1413,11 @@
         const [f,setF]=useState({nome:"",email:"",crc:"",escritorio:"",qtd:"",telefone:"",canal:""});
         const [loading,setLoading]=useState(false);
         const [sent,setSent]=useState(false);
-        const u=(k,v)=>setF(x=>({...x,[k]:v}));
+        const [emailErr,setEmailErr]=useState(null);
+        const u=(k,v)=>{ if(k==="email") setEmailErr(null); setF(x=>({...x,[k]:v})); };
         async function submit(e){
           e.preventDefault();
-          if(!/^\S+@\S+\.\S+$/.test(f.email)) return toast("Digite um e-mail válido.","error");
+          if(!/^\S+@\S+\.\S+$/.test(f.email)) return setEmailErr("Digite um e-mail válido.");
           setLoading(true);
           const {error}=await supabase.from("leads").insert({tipo:"parceiro_contador",source:"parceiro",nome:f.nome,email:f.email,crc:f.crc,escritorio:f.escritorio,qtd_clientes_pj:Number(f.qtd)||0,telefone:f.telefone,canal_aquisicao:f.canal,status:"novo"});
           supabase.functions.invoke("send-email",{body:{tipo:"parceiro-contador-recebido",email:f.email,nome:f.nome,subject:"Recebemos sua solicitação de parceria — Crivo",body:"Recebemos sua solicitação de parceria. Entraremos em contato para seu onboarding como parceiro Crivo."}}).catch(logFail("e-mail de parceria"));
@@ -1339,7 +1442,7 @@
             : h(Card,null,h("h2",{className:"font-serif text-3xl font-black"},"Quero ser parceiro"),
               h("form",{onSubmit:submit,className:"mt-5 space-y-3"},
                 [["nome","Nome do contador"],["email","E-mail"],["crc","CRC"],["escritorio","Escritório"],["qtd","Quantidade de clientes PJ"],["telefone","Telefone"],["canal","Como conheceu o Crivo"]].map(([k,l])=>
-                  h(Field,{key:k,label:l},h(Input,{type:k==="email"?"email":k==="qtd"?"number":"text",value:f[k],onChange:e=>u(k,e.target.value),required:k!=="telefone"&&k!=="canal"}))),
+                  h(Field,{key:k,label:l,error:k==="email"?emailErr:null},h(Input,{type:k==="email"?"email":k==="qtd"?"number":"text",value:f[k],onChange:e=>u(k,e.target.value),required:k!=="telefone"&&k!=="canal"}))),
                 h(Button,{type:"submit",disabled:loading,className:"w-full"},loading?"Enviando...":"Enviar")))));
       }
 
@@ -1419,8 +1522,8 @@
                 h("h1",{className:"font-serif text-3xl font-black"},"Definir nova senha"),
                 h("p",{className:"mt-2 text-sm text-slate-500"},"Escolha a nova senha da sua conta Crivo."),
                 h("form",{onSubmit:save,className:"mt-6 space-y-4"},
-                  h(Field,{label:"Nova senha",hint:"Mínimo de 8 caracteres."},h(Input,{type:"password",value:pw,onChange:e=>setPw(e.target.value),required:true,autoComplete:"new-password"})),
-                  h(Field,{label:"Confirmar nova senha",error:pw2&&pw!==pw2?"As senhas não conferem.":null},h(Input,{type:"password",value:pw2,onChange:e=>setPw2(e.target.value),required:true,autoComplete:"new-password"})),
+                  h(Field,{label:"Nova senha",hint:"Mínimo de 8 caracteres."},h(PasswordInput,{value:pw,onChange:e=>setPw(e.target.value),required:true,autoComplete:"new-password"}),h(PasswordStrength,{value:pw})),
+                  h(Field,{label:"Confirmar nova senha",error:pw2&&pw!==pw2?"As senhas não conferem.":null},h(PasswordInput,{value:pw2,onChange:e=>setPw2(e.target.value),required:true,autoComplete:"new-password"})),
                   h(Button,{type:"submit",disabled:saving,className:"w-full"},saving?"Salvando...":"Salvar nova senha"))))));
       }
 
@@ -1467,9 +1570,9 @@
         Object.values(byTipo).forEach((arr) => arr.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)));
         const extraTipos = Object.keys(byTipo).filter((t) => !DOC_META[t]);
         const STATUS_BADGE = {
-          valid: ["✓ Aprovado", "bg-green-50 text-success"],
-          pending: ["⏳ Pendente", "bg-yellow-50 text-gold"],
-          rejected: ["✗ Rejeitado", "bg-red-50 text-danger"],
+          valid: ["Aprovado", "bg-green-50 text-success"],
+          pending: ["Pendente", "bg-yellow-50 text-gold"],
+          rejected: ["Rejeitado", "bg-red-50 text-danger"],
           expired: ["Vencido", "bg-red-50 text-danger"],
         };
         const rr = risk(score?.total);
@@ -1480,7 +1583,7 @@
                 h("p", { className:"mono-label text-gold" }, "Análise de cadastro"),
                 h("h2", { id:"admin-review-title", className:"mt-1 font-serif text-3xl font-black" }, company.razao_social),
                 h("p", { className:"mt-1 text-sm text-slate-400" }, formatCnpj(company.cnpj))),
-              h("button", { onClick:onClose, "aria-label":"Fechar", className:"rounded-lg border px-3 py-1 text-sm hover:bg-white/10" }, "✕")),
+              h("button", { onClick:onClose, "aria-label":"Fechar", className:"rounded-lg border px-3 py-2 text-sm hover:bg-white/10" }, h(Icon, { name:"x", size:14 }))),
             h("div", { className:"mt-4 flex flex-wrap gap-2 text-xs" },
               [REGIME_LABEL[company.regime] || company.regime, company.segmento, [company.municipio, company.estado].filter(Boolean).join("/")]
                 .filter(Boolean).map((x) => h("span", { key:String(x), className:"rounded-full bg-white/10 px-3 py-1" }, x)),
@@ -1535,6 +1638,9 @@
         const [docsByCompany, setDocsByCompany] = useState({});
         const [loading, setLoading] = useState(true);
         const [review, setReview] = useState(null);
+        const [q, setQ] = useState("");
+        const [fStatus, setFStatus] = useState("");
+        const [fDocs, setFDocs] = useState(false);
         const isAdmin = profile?.role === "admin";
         async function load() {
           const { data } = await supabase.from("companies").select("*").order("listed", { ascending: true }).order("created_at", { ascending: false }).limit(200);
@@ -1559,29 +1665,68 @@
             h(Notice, { tone:"warning", className:"mt-4" }, "Acesso restrito à equipe Crivo. Sua conta ainda não tem perfil de administrador no banco de dados — ative-a (role = admin, plan = premium) e entre novamente.")));
         }
         const validCount = (id) => (docsByCompany[id] || []).filter((d) => d.status === "valid" && DOC_META[d.tipo]?.required).length;
+        const filtered = rows.filter((c) => {
+          const qq = q.trim().toLowerCase();
+          if (qq) {
+            const dig = cleanCnpj(qq);
+            const byName = (c.razao_social || "").toLowerCase().includes(qq) || (c.nome_fantasia || "").toLowerCase().includes(qq);
+            const byCnpj = dig.length >= 3 && (c.cnpj || "").includes(dig);
+            if (!byName && !byCnpj) return false;
+          }
+          if (fStatus === "published" && !c.listed) return false;
+          if (fStatus === "review" && c.listed) return false;
+          if (fDocs && validCount(c.id) < REQUIRED_DOC_COUNT) return false;
+          return true;
+        });
+        const published = rows.filter((c) => c.listed).length;
+        const docsOk = rows.filter((c) => validCount(c.id) >= REQUIRED_DOC_COUNT).length;
+        const chip = (on) => `mono-label inline-flex items-center rounded border px-3 py-2.5 transition md:py-1.5 ${on ? "border-gold/50 bg-yellow-50 text-gold" : "border-white/15 text-slate-400 hover:border-gold/40 hover:text-gold"}`;
+        const rowActions = (c) => h(React.Fragment, null,
+          h("button", { onClick:()=>setReview(c), className:"mr-3 py-2 text-xs font-bold text-brand hover:underline md:py-0" }, "Analisar"),
+          c.listed
+            ? h("button", { onClick:()=>setListed(c, false), className:"py-2 text-xs font-bold text-danger hover:underline md:py-0" }, "Despublicar")
+            : h("button", { onClick:()=>setListed(c, true), className:"py-2 text-xs font-bold text-success hover:underline md:py-0" }, "Publicar"));
+        const listedBadge = (c) => c.listed
+          ? h("span", { className:"rounded-full bg-green-50 px-2 py-1 text-xs font-bold text-success" }, "Publicado")
+          : h("span", { className:"rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-500" }, "Em análise");
         return h(PrivateLayout, null,
           h(Card, { className:"overflow-x-auto" },
             h("h1", { className:"font-serif text-4xl font-black" }, "Administração do diretório"),
             h("p", { className:"mt-2 text-sm text-slate-500" }, "Somente empresas publicadas aparecem no diretório para visitantes. Clique em \"Analisar\" para revisar documentos e contas antes de publicar."),
+            h("div", { className:"mono-label mt-4 flex flex-wrap gap-x-5 gap-y-1 text-slate-500" },
+              h("span", null, `${rows.length} empresas`),
+              h("span", { className:"text-success" }, `${published} publicadas`),
+              h("span", { className:"text-gold" }, `${rows.length - published} em análise`),
+              h("span", null, `${docsOk} com docs completos`)),
+            h("div", { className:"mt-4 flex flex-col gap-3 md:flex-row md:items-center" },
+              h(Input, { value:q, onChange:(e)=>setQ(e.target.value), placeholder:"Buscar por razão social ou CNPJ", "aria-label":"Buscar empresa", className:"md:max-w-sm" }),
+              h("div", { className:"flex flex-wrap gap-2" },
+                h("button", { type:"button", onClick:()=>setFStatus(fStatus === "published" ? "" : "published"), className:chip(fStatus === "published") }, "Publicadas"),
+                h("button", { type:"button", onClick:()=>setFStatus(fStatus === "review" ? "" : "review"), className:chip(fStatus === "review") }, "Em análise"),
+                h("button", { type:"button", onClick:()=>setFDocs(!fDocs), className:chip(fDocs) }, `Docs ${REQUIRED_DOC_COUNT}/${REQUIRED_DOC_COUNT}`))),
             loading
               ? h("div", { className:"mt-6 space-y-3" }, [1,2,3].map((i)=>h("div",{key:i,className:"skel h-10 w-full"})))
-              : rows.length === 0
-                ? h("p", { className:"mt-4 text-sm text-slate-500" }, "Nenhuma empresa cadastrada ainda.")
-                : h("table", { className:"mt-6 w-full text-left text-sm" },
+              : filtered.length === 0
+                ? h("p", { className:"mt-6 text-sm text-slate-500" }, rows.length ? "Nenhuma empresa encontrada com essa busca/filtro." : "Nenhuma empresa cadastrada ainda.")
+                : h(React.Fragment, null,
+                  h("div", { className:"mt-4 space-y-3 md:hidden" }, filtered.map((c) =>
+                    h("div", { key:c.id, className:"rounded-lg border border-slate-200 p-3" },
+                      h("div", { className:"flex items-start justify-between gap-3" },
+                        h("div", { className:"min-w-0" },
+                          h("p", { className:"truncate font-semibold" }, c.razao_social),
+                          h("p", { className:"text-xs text-slate-500" }, formatCnpj(c.cnpj))),
+                        listedBadge(c)),
+                      h("p", { className:"mt-1 text-xs text-slate-500" }, `Docs ${validCount(c.id)}/${REQUIRED_DOC_COUNT} · RFB ${c.situacao_rfb || "—"}`),
+                      h("div", { className:"mt-2 flex flex-wrap gap-x-2" }, rowActions(c))))),
+                  h("table", { className:"mt-6 hidden w-full text-left text-sm md:table" },
                   h("thead", null, h("tr", { className:"border-b" }, ["Empresa","CNPJ","Docs obrigatórios","Situação RFB","Diretório","Ações"].map((x)=>h("th",{key:x,className:"py-2 pr-3"},x)))),
-                  h("tbody", null, rows.map((c) => h("tr", { key:c.id, className:"border-b" },
+                  h("tbody", null, filtered.map((c) => h("tr", { key:c.id, className:"border-b" },
                     h("td", { className:"py-3 pr-3 font-semibold" }, c.razao_social),
                     h("td", { className:"pr-3 whitespace-nowrap" }, formatCnpj(c.cnpj)),
                     h("td", { className:"pr-3" }, h("span", { className:validCount(c.id) >= REQUIRED_DOC_COUNT ? "font-bold text-success" : "" }, `${validCount(c.id)}/${REQUIRED_DOC_COUNT}`)),
                     h("td", { className:"pr-3" }, h("span", { className:c.situacao_rfb === "ativa" ? "text-success" : "text-danger" }, c.situacao_rfb || "—")),
-                    h("td", { className:"pr-3" }, c.listed
-                      ? h("span", { className:"rounded-full bg-green-50 px-2 py-1 text-xs font-bold text-success" }, "Publicado")
-                      : h("span", { className:"rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-500" }, "Em análise")),
-                    h("td", { className:"whitespace-nowrap" },
-                      h("button", { onClick:()=>setReview(c), className:"mr-3 text-xs font-bold text-brand hover:underline" }, "Analisar"),
-                      c.listed
-                        ? h("button", { onClick:()=>setListed(c, false), className:"text-xs font-bold text-danger hover:underline" }, "Despublicar")
-                        : h("button", { onClick:()=>setListed(c, true), className:"text-xs font-bold text-success hover:underline" }, "Publicar"))))))),
+                    h("td", { className:"pr-3" }, listedBadge(c)),
+                    h("td", { className:"whitespace-nowrap" }, rowActions(c)))))))),
           review && h(AdminReview, { company:review, docs:docsByCompany[review.id] || [], onClose:()=>setReview(null), onChanged:load, onSetListed:setListed }));
       }
 
