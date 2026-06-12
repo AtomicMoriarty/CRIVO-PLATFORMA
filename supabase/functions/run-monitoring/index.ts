@@ -60,8 +60,9 @@ Deno.serve(async () => {
     const { data: owners } = await supabase.from("company_users").select("user_id").eq("company_id", company.id);
     owners?.forEach((o) => o.user_id && userIds.add(o.user_id));
     const { data: buyers } = await supabase.from("portfolios").select("buyer_id").eq("supplier_id", company.id).eq("status", "active");
-    for (const b of buyers || []) {
-      const { data: us } = await supabase.from("company_users").select("user_id").eq("company_id", b.buyer_id);
+    const buyerIds = [...new Set((buyers || []).map((b) => b.buyer_id))];
+    if (buyerIds.length) {
+      const { data: us } = await supabase.from("company_users").select("user_id").in("company_id", buyerIds);
       us?.forEach((u) => u.user_id && userIds.add(u.user_id));
     }
     for (const id of userIds) {
