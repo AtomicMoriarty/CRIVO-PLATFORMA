@@ -169,7 +169,17 @@
       async function lookupCnpj(cnpj) {
         const d = cleanCnpj(cnpj);
         if (d.length !== 14) throw new Error("CNPJ incompleto");
-        const res = await fetch(`https://publica.cnpj.ws/cnpj/${d}`);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 12000);
+        let res;
+        try {
+          res = await fetch(`https://publica.cnpj.ws/cnpj/${d}`, { signal: controller.signal });
+        } catch (e) {
+          if (e?.name === "AbortError") throw new Error("A consulta à Receita demorou demais. Tente novamente.");
+          throw new Error("Não foi possível consultar o CNPJ agora.");
+        } finally {
+          clearTimeout(timeout);
+        }
         if (res.status === 429) throw new Error("Limite de consultas à Receita atingido. Aguarde 1 minuto e tente novamente.");
         if (res.status === 404) throw new Error("CNPJ não encontrado na Receita Federal.");
         if (!res.ok) throw new Error("Não foi possível consultar o CNPJ agora.");
@@ -232,6 +242,7 @@
         };
         let { error: pErr } = await supabase.from("profiles").upsert({ ...base, email: pending.email, display_name: pending.nome, username: String(pending.email).split("@")[0] });
         if (pErr) ({ error: pErr } = await supabase.from("profiles").upsert(base));
+        if (pErr) { toast("Não foi possível concluir seu cadastro agora. Tente novamente em alguns instantes.", "error"); return null; }
         let company = null;
         const { data: existing } = await supabase.from("companies").select("*").eq("cnpj", pending.cnpj).maybeSingle();
         if (existing) {

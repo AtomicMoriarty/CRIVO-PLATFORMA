@@ -63,7 +63,9 @@ Deno.serve(async (req) => {
       if (!company) {
         const rfbRes = await fetch(`https://publica.cnpj.ws/cnpj/${clean}`);
         if (rfbRes.status === 429) return json({ error: "Limite de consultas à Receita atingido. Aguarde 1 minuto e tente novamente." }, 429);
-        const rfb = rfbRes.ok ? await rfbRes.json() : null;
+        if (rfbRes.status === 404) return json({ error: "CNPJ não encontrado na Receita Federal." }, 404);
+        if (!rfbRes.ok) return json({ error: "A Receita Federal está indisponível no momento. Tente novamente em alguns minutos." }, 503);
+        const rfb = await rfbRes.json();
         if (!rfb?.razao_social) return json({ error: "CNPJ não encontrado na Receita Federal." }, 404);
         const regime = rfb?.simples?.mei === "Sim" ? "mei" : rfb?.simples?.simples === "Sim" ? "simples" : null;
         const payload = {
