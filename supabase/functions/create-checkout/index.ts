@@ -15,8 +15,8 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const plan = body.plan || body.plano;
     const user_id = body.user_id || body.usuario_id;
-    const success_url = body.success_url || "https://crivo.pages.dev/painel?checkout=success";
-    const cancel_url = body.cancel_url || "https://crivo.pages.dev/planos?checkout=cancelled";
+    const success_url = body.success_url || "https://crivo-plataforma.heitorhllopes.workers.dev/painel?checkout=success";
+    const cancel_url = body.cancel_url || "https://crivo-plataforma.heitorhllopes.workers.dev/planos?checkout=cancelled";
     const email = body.email;
     if (!["pro", "premium"].includes(plan)) return json({ error: "Plano inválido." }, 400);
     if (!user_id) return json({ error: "Usuário não identificado." }, 400);

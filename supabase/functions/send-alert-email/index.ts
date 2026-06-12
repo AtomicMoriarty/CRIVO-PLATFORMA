@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 
-const BASE = Deno.env.get("CRIVO_APP_URL") || "https://crivo.pages.dev";
+const BASE = Deno.env.get("CRIVO_APP_URL") || "https://crivo-plataforma.heitorhllopes.workers.dev";
 
 serve(async (req) => {
   try {

@@ -6,7 +6,7 @@ const cors = {
 };
 
 // Endereço-base do site (para o logo e links). Mesma convenção do send-alert-email.
-const BASE = Deno.env.get("CRIVO_APP_URL") || "https://crivo.pages.dev";
+const BASE = Deno.env.get("CRIVO_APP_URL") || "https://crivo-plataforma.heitorhllopes.workers.dev";
 
 // Cabeçalho de marca à prova de bloqueio: o logo é uma imagem hospedada no site,
 // mas o nome "Crivo." é texto serif — se o cliente de e-mail bloquear imagens,
