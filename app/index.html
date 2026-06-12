@@ -5,6 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Crivo · Inteligência Fiscal de Fornecedores</title>
     <meta name="description" content="O Crivo avalia a conformidade tributária de fornecedores (CBS/IBS · LC 214/2025) e gera um score de aderência fiscal com alertas automáticos." />
+    <meta name="theme-color" content="#0A1420" />
+    <link rel="canonical" href="https://crivo.pages.dev/" />
+    <!-- Open Graph / Twitter: confiança e pré-visualização ao compartilhar o link -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Crivo" />
+    <meta property="og:locale" content="pt_BR" />
+    <meta property="og:title" content="Crivo · Inteligência Fiscal de Fornecedores" />
+    <meta property="og:description" content="Avalie a conformidade tributária dos seus fornecedores (CBS/IBS · LC 214/2025), gere o Score Crivo e receba alertas diários antes de contratar." />
+    <meta property="og:url" content="https://crivo.pages.dev/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Crivo · Inteligência Fiscal de Fornecedores" />
+    <meta name="twitter:description" content="Avalie a conformidade tributária dos seus fornecedores (CBS/IBS · LC 214/2025), gere o Score Crivo e receba alertas diários antes de contratar." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;700;900&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -395,6 +407,37 @@
         return h("div", { className:`rounded-lg border p-3 text-sm ${tones[tone] || tones.info} ${className}` }, ...childList(children));
       }
 
+      // Acessibilidade de modal: foco inicial no painel, trap de Tab, Esc fecha,
+      // trava o scroll do fundo e devolve o foco ao elemento de origem ao fechar.
+      function useModalA11y(onClose) {
+        const ref = React.useRef(null);
+        useEffect(() => {
+          const node = ref.current;
+          const prevFocus = document.activeElement;
+          const sel = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+          const focusables = () => node ? Array.from(node.querySelectorAll(sel)).filter((el) => el.offsetParent !== null) : [];
+          (node?.querySelector(sel) || node)?.focus?.();
+          const onKey = (e) => {
+            if (e.key === "Escape") { e.preventDefault(); onClose(); return; }
+            if (e.key !== "Tab") return;
+            const f = focusables();
+            if (!f.length) return;
+            const first = f[0], last = f[f.length - 1];
+            if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+            else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+          };
+          document.addEventListener("keydown", onKey);
+          const prevOverflow = document.body.style.overflow;
+          document.body.style.overflow = "hidden";
+          return () => {
+            document.removeEventListener("keydown", onKey);
+            document.body.style.overflow = prevOverflow;
+            try { prevFocus?.focus?.(); } catch (_) {}
+          };
+        }, []);
+        return ref;
+      }
+
       // ---------- Movimento / polimento ----------
       function Reveal({ children, className = "", delay = 0 }) {
         const ref = React.useRef(null);
@@ -498,22 +541,18 @@
             setLoading(false);
           });
         }, [company?.cnpj]);
-        useEffect(() => {
-          const onKey = (e) => { if (e.key === "Escape") onClose(); };
-          addEventListener("keydown", onKey);
-          return () => removeEventListener("keydown", onKey);
-        }, []);
+        const dialogRef = useModalA11y(onClose);
         if (!company) return null;
         const total = score?.total;
         const rr = risk(total);
         const anos = info?.data_abertura ? Math.floor((Date.now() - Date.parse(info.data_abertura)) / (365.25 * 86400000)) : null;
         const socios = Array.isArray(info?.socios) ? info.socios : [];
         return h("div", { className:"fixed inset-0 z-50 overflow-y-auto bg-black/70 p-4 backdrop-blur-sm", onClick:(e)=>{ if (e.target === e.currentTarget) onClose(); } },
-          h("div", { className:"modal-in mx-auto my-8 w-full max-w-2xl rounded-xl border border-slate-200 bg-navy p-6" },
+          h("div", { ref:dialogRef, role:"dialog", "aria-modal":"true", "aria-labelledby":"kyp-title", tabIndex:-1, className:"modal-in mx-auto my-8 w-full max-w-2xl rounded-xl border border-slate-200 bg-navy p-6 outline-none" },
             h("div", { className:"flex items-start justify-between gap-4" },
               h("div", null,
                 h("p", { className:"mono-label text-gold" }, "Know Your Provider"),
-                h("h2", { className:"mt-1 font-serif text-3xl font-black" }, info?.razao_social || "Empresa"),
+                h("h2", { id:"kyp-title", className:"mt-1 font-serif text-3xl font-black" }, info?.razao_social || "Empresa"),
                 h("p", { className:"mt-1 text-sm text-slate-400" }, formatCnpj(info?.cnpj))),
               h("button", { onClick:onClose, "aria-label":"Fechar", className:"rounded-lg border px-3 py-1 text-sm hover:bg-white/10" }, "✕")),
             h("div", { className:"mt-4 flex flex-wrap gap-2 text-xs" },
@@ -566,8 +605,8 @@
                 ...navLinks.map(([to, label]) => h(Link, { key:to, to, className:"hover:text-brand" }, label)),
                 session && h("button", { onClick:signOut, className:"text-slate-500 hover:text-danger" }, "Sair"),
                 h(Link, { to:cta[0], className:"rounded-lg bg-gold px-4 py-2 font-bold text-navy hover:bg-yellow-500" }, cta[1])),
-              h("button", { className:"rounded-lg border px-3 py-2 text-sm md:hidden", "aria-label":"Abrir menu", onClick:()=>setMenu(!menu) }, menu ? "✕" : "☰")),
-            menu && h("nav", { className:"fade-in border-t border-slate-200 glass px-4 py-3 md:hidden" },
+              h("button", { className:"rounded-lg border px-3 py-2 text-sm md:hidden", "aria-label":menu?"Fechar menu":"Abrir menu", "aria-expanded":menu, "aria-controls":"mobile-nav", onClick:()=>setMenu(!menu) }, menu ? "✕" : "☰")),
+            menu && h("nav", { id:"mobile-nav", className:"fade-in border-t border-slate-200 glass px-4 py-3 md:hidden" },
               ...navLinks.map(([to, label]) => h(Link, { key:to, to, onClick:()=>setMenu(false), className:"block rounded-lg px-3 py-2 text-sm font-medium hover:bg-white/10" }, label)),
               session && h("button", { onClick:()=>{ setMenu(false); signOut(); }, className:"block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-500" }, "Sair"),
               h(Link, { to:cta[0], onClick:()=>setMenu(false), className:"mt-2 block rounded-lg bg-gold px-3 py-2 text-center font-bold text-navy" }, cta[1]))),
@@ -1361,6 +1400,7 @@
             setScore(sc);
           })();
         }, [company.id]);
+        const dialogRef = useModalA11y(onClose);
         async function setDocStatus(d, status) {
           const { error } = await supabase.from("documents").update({ status }).eq("id", d.id);
           if (error) return toast(adminError(error), "error");
@@ -1384,11 +1424,11 @@
         };
         const rr = risk(score?.total);
         return h("div", { className:"fixed inset-0 z-50 overflow-y-auto bg-black/70 p-4 backdrop-blur-sm", onClick:(e)=>{ if (e.target === e.currentTarget) onClose(); } },
-          h("div", { className:"modal-in mx-auto my-8 w-full max-w-3xl rounded-xl border border-slate-200 bg-navy p-6" },
+          h("div", { ref:dialogRef, role:"dialog", "aria-modal":"true", "aria-labelledby":"admin-review-title", tabIndex:-1, className:"modal-in mx-auto my-8 w-full max-w-3xl rounded-xl border border-slate-200 bg-navy p-6 outline-none" },
             h("div", { className:"flex items-start justify-between gap-4" },
               h("div", null,
                 h("p", { className:"mono-label text-gold" }, "Análise de cadastro"),
-                h("h2", { className:"mt-1 font-serif text-3xl font-black" }, company.razao_social),
+                h("h2", { id:"admin-review-title", className:"mt-1 font-serif text-3xl font-black" }, company.razao_social),
                 h("p", { className:"mt-1 text-sm text-slate-400" }, formatCnpj(company.cnpj))),
               h("button", { onClick:onClose, "aria-label":"Fechar", className:"rounded-lg border px-3 py-1 text-sm hover:bg-white/10" }, "✕")),
             h("div", { className:"mt-4 flex flex-wrap gap-2 text-xs" },
