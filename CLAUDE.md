@@ -8,7 +8,7 @@ Crivo é uma plataforma B2B de **inteligência fiscal aplicada à cadeia de forn
 
 ## Arquitetura (decisão consciente — não "modernize" sem justificar)
 
-- **Frontend**: arquivo único `app/index.html` — React 18 via esm.sh (sem build, sem JSX; usa `h()` = createElement), Tailwind via CDN com tema dark customizado no `<style>`. Validação de sintaxe: extrair o `<script type="module">` e rodar `node --check`.
+- **Frontend**: arquivo único `app/index.html` — React 18 via esm.sh (sem build, sem JSX; usa `h()` = createElement), tema dark customizado no `<style>`. **Tailwind agora é compilado estaticamente** em `app/assets/tailwind.css` (não usa mais o CDN): ao adicionar classes novas, rodar `npx -y tailwindcss@3.4.14 -c tooling/tailwind.config.js -i tooling/tailwind.css -o app/assets/tailwind.css --minify` e commitar o CSS. Validação de sintaxe: extrair o `<script type="module">` e rodar `node --check`.
 - **Deploy do site**: Cloudflare Workers Builds conectado ao GitHub — **todo push ao branch de produção publica automaticamente** (`wrangler.jsonc`, worker `crivo-plataforma`, assets `./app`, SPA). Cuidado: push = produção.
 - **Backend**: Supabase, projeto `lgbuywbcpnghqaoaqsxb`. Postgres com RLS, 7 edge functions (Deno), Storage, pg_cron.
 - **Branch de produção**: `claude/gallant-fermat-nsep1u` (repo `AtomicMoriarty/CRIVO-PLATFORMA`). O branch `claude/inspiring-tesla-z27f6k` é um experimento abandonado de Prisma — ignorar/apagar, não mesclar.
@@ -21,9 +21,13 @@ Tabelas: `profiles` (role: buyer/supplier/accountant/admin; plan: free/pro/premi
 Regras importantes:
 - `is_crivo_admin()` exige `role='admin'` **e** `plan='premium'`. Admins atuais: `heitorhllopes@gmail.com`, `portoepacca@portoepacca.com`.
 - Anon (visitante) só lê `companies`/`scores` com `listed = true` (diretório curado: empresas só aparecem após a equipe aprovar no `/admin`).
+- RLS consolidada (2026-06-12): 1 policy por papel/ação, `WITH CHECK` espelha o `USING`, `auth.uid()` embrulhado em `(select ...)`. `profiles` legível só pelo próprio dono + admin (LGPD). Usuário autenticado NÃO consegue: forjar scores, vincular-se a empresa alheia, ler perfis de terceiros.
+- Trigger `protect_profile_privileges` em `profiles`: `role`/`plan` não são auto-promovíveis por anon/authenticated (bloqueia escalonamento a admin/premium); cadastro legítimo grava buyer/supplier/accountant; upgrades de plano só via service role (Stripe) ou admin.
+- **Hook de login** `custom_access_token_hook` lê `public.profiles` (NUNCA referenciar `user_roles` — tabela removida; em 2026-06-12 o hook quebrado derrubou todo o login até o hotfix). `mark_alert_read` usa `auth.uid()` e ignora o `p_user_id` do cliente.
+- Documentos: nascem `pending` no upload; só contam no score após aprovação no `/admin` (que dispara recálculo).
 - Storage: buckets `documents` (privado, acesso por `company_users` + admin) e `avatars` (público).
 - Cron: job `crivo-run-monitoring-daily` (`0 9 * * *` UTC = 6h BRT) chama `run-monitoring` via pg_net com service role key no Vault (`crivo_service_role_key`).
-- Migrations em `supabase/migrations/` — todas aplicadas no remoto até `20260610140000`. Nova mudança de banco = nova migration com timestamp.
+- Migrations em `supabase/migrations/` — todas aplicadas no remoto até `20260612120029`. Nova mudança de banco = nova migration com timestamp.
 
 ## Edge functions (todas publicadas)
 
@@ -36,7 +40,7 @@ Regras importantes:
 
 ## Frontend — páginas e fluxos
 
-`/` (hero editorial + formulário de diagnóstico-lead + estatísticas + comparação de crédito + planos) · `/diretorio` (curado, chips de filtro, busca por CNPJ avulso, "Recomendados para você", modal KYP com breakdown do score) · `/login`, `/cadastrar` (3 etapas com validação; resiliente à confirmação de e-mail via `crivo_pending_setup` no localStorage) · `/planos` · `/escritorio` (lead de parceiro contador) · `/privacidade`, `/termos` · `/dashboard` (visão geral + carteira + alertas) · `/documentos` (6 obrigatórios, validades típicas reais, status no diretório) · `/admin` (sala de análise: documentos aprovar/rejeitar/baixar, contas vinculadas, publicar/despublicar) · 404.
+`/` (hero editorial + formulário de diagnóstico-lead + estatísticas + comparação de crédito + seção "Quem assina a metodologia" com os pesos das 7 dimensões + planos) · `/diretorio` (curado, chips de filtro, busca por CNPJ avulso, "Recomendados para você", modal KYP com breakdown do score) · `/empresa/:cnpj` (página pública compartilhável da empresa listada; membro pré-visualiza a própria antes de publicar; sócios minimizados — só contagem) · `/login` (erro inline + mostrar senha), `/cadastrar` (escolha de perfil contratante × fornecedor — `?perfil=fornecedor` — + 3 etapas com validação inline; fornecedor recebe role=supplier e cai em /documentos; resiliente à confirmação de e-mail via `crivo_pending_setup` no localStorage) · `/auth/callback` (confirmação + tela "definir nova senha" quando `?type=recovery`) · `/planos` · `/escritorio` (lead de parceiro contador) · `/privacidade`, `/termos` · `/dashboard` (visão geral + carteira + alertas; tabela vira cards no mobile) · `/documentos` (6 obrigatórios, upload nasce "em análise" com badge de status) · `/admin` (sala de análise com busca/filtros/contadores: documentos aprovar/rejeitar/baixar — aprovação recalcula o score —, contas vinculadas, publicar/despublicar) · 404. Ícones são SVG (componente `Icon`) — não usar emoji como ícone. Modais usam `useModalA11y` (foco preso, Esc, aria).
 
 Design system: dark navy `#0A1420` + dourado `#C8963A`; Playfair Display (títulos), IBM Plex Sans (texto), IBM Plex Mono (rótulos `.mono-label`); `.gold-panel` (degradê), `.card-lift` (linha dourada no hover), barras de score em degradê, animações Reveal/CountUp/skeletons, `prefers-reduced-motion` respeitado.
 
@@ -53,8 +57,9 @@ Design system: dark navy `#0A1420` + dourado `#C8963A`; Playfair Display (títul
 - Domínio próprio (ex.: crivo.com.br) → apontar no Cloudflare + verificar no Resend (`RESEND_FROM`).
 - Stripe quando for cobrar (criar conta, setar `STRIPE_SECRET_KEY`, `STRIPE_PRICE_PRO_ID`, `STRIPE_PRICE_PREMIUM_ID`, `STRIPE_WEBHOOK_SECRET`).
 - Dimensões "contencioso" e "retenções" do score são placeholders (integrações futuras: tribunais, e-CAC, Painel Receita/Portaria RFB 678, Swagger do Split Payment em consumo.tributos.gov.br).
-- Fluxo de cadastro específico "Sou Fornecedor" e dashboard multiempresa para escritórios (Fase 2 do PRD).
+- Dashboard multiempresa para escritórios (Fase 2 do PRD). O fluxo "Sou Fornecedor" já existe no cadastro (`?perfil=fornecedor`).
 - Apagar a function temporária `setup-vault-key` no dashboard (stub inofensivo).
+- Ativar "Leaked password protection" no dashboard do Supabase (Authentication → Policies) — não dá para fazer via API.
 
 
 ## King Context
