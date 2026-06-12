@@ -574,7 +574,7 @@
                 h("span", { className:`rounded-full px-3 py-1 text-xs font-bold ${rr.soft} ${rr.text}` }, rr.label)),
               h("div", { className:"scorebar mt-3 h-2 rounded-full bg-slate-100" },
                 h("span", { className:`block h-2 rounded-full ${rr.fill}`, style:{ width:`${Math.min(total / 10, 100)}%` } })),
-              h("p", { className:"mt-2 text-xs text-slate-500" }, `Calculado em ${new Date(score.calculated_at).toLocaleString("pt-BR")} · 5 de 7 dimensões ativas`),
+              h("p", { className:"mt-2 text-xs text-slate-500" }, `Calculado em ${new Date(score.calculated_at).toLocaleString("pt-BR")}${(()=>{ const n = score.explanation ? DIM_META.filter(([,k])=>{ const s = score.explanation?.[k]?.source; return s && s !== "placeholder"; }).length : null; return n ? ` · ${n} de ${DIM_META.length} dimensões ativas` : ""; })()}`),
               h("div", { className:"mt-4" }, h(RiskBanner, { total })),
               h(ScoreBreakdown, { score }),
               socios.length > 0 && h("div", { className:"mt-4 rounded-lg border border-slate-200 p-3" },
@@ -941,7 +941,7 @@
         }
         async function reset(){
           if(!email) return toast("Digite seu e-mail primeiro.","error");
-          await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${location.origin}/auth/callback` });
+          await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${location.origin}/auth/callback?type=recovery` });
           toast("Verifique seu e-mail para redefinir a senha.");
         }
         return h(PublicLayout,null,h("main",{className:"mx-auto max-w-md px-4 py-16"},h(Card,null,
@@ -1086,7 +1086,7 @@
 
       // ---------- Dashboard (carteira) ----------
       function Dashboard() {
-        const { company, profile, refresh } = useAuth();
+        const { session, company, profile, refresh } = useAuth();
         const [items,setItems]=useState([]);
         const [alerts,setAlerts]=useState([]);
         const [cnpj,setCnpj]=useState("");
@@ -1122,7 +1122,7 @@
               if (error || data?.error || !data?.company) throw new Error(data?.error || error?.message || "Não foi possível consultar este CNPJ.");
               supplier = data.company;
             }
-            const { error: portErr }=await supabase.from("portfolios").insert({buyer_id:company.id,supplier_id:supplier.id,added_by:company.user_id,status:"active"});
+            const { error: portErr }=await supabase.from("portfolios").insert({buyer_id:company.id,supplier_id:supplier.id,added_by:session?.user?.id||null,status:"active"});
             if(portErr) throw new Error(portErr.message.includes("duplicate")?"Este fornecedor já está na sua carteira.":portErr.message);
             invokeScore({company_id:supplier.id}).catch(logFail("calculate-score"));
             setCnpj("");
@@ -1245,11 +1245,13 @@
           const path=`${company.id}/${tipo}/${Date.now()}_${file.name.replace(/[^\w.\-]/g,"_")}`;
           const up=await supabase.storage.from("documents").upload(path,file,{upsert:true});
           if(up.error){setLoading(false);return toast(translateError(up.error.message),"error");}
-          const { error }=await supabase.from("documents").insert({company_id:company.id,tipo,filename:file.name,storage_path:path,tamanho:file.size,valid_until:valid||null,validade:valid||null,status:"valid",lgpd_consent:true,lgpd_consent_at:new Date().toISOString()});
+          // Documento entra como "pending": só passa a contar no score após a
+          // aprovação da equipe no /admin (antes nascia "valid" e inflava a
+          // dimensão Documentação sem revisão).
+          const { error }=await supabase.from("documents").insert({company_id:company.id,tipo,filename:file.name,storage_path:path,tamanho:file.size,valid_until:valid||null,validade:valid||null,status:"pending",lgpd_consent:true,lgpd_consent_at:new Date().toISOString()});
           if(error){ setLoading(false); return toast(translateError(error.message),"error"); }
-          invokeScore({company_id:company.id,force:true}).catch(logFail("calculate-score"));
           setLoading(false); setFile(null); setValid("");
-          toast("Documento enviado! Seu score está sendo recalculado.");
+          toast("Documento enviado para análise. Ele passa a contar no score após a aprovação da equipe Crivo.");
           load();
         }
         async function download(d){
@@ -1264,7 +1266,13 @@
           if(days<=30) return { label:`Vence em ${days} dias`, cls:"text-warning font-bold" };
           return { label:`Válido até ${new Date(d.valid_until).toLocaleDateString("pt-BR")}`, cls:"text-success" };
         }
-        const requiredMissing = Object.entries(DOC_META).filter(([k,m])=>m.required && !docs.some(d=>d.tipo===k)).map(([k,m])=>m.label);
+        const requiredMissing = Object.entries(DOC_META).filter(([k,m])=>m.required && !docs.some(d=>d.tipo===k && d.status!=="rejected")).map(([k,m])=>m.label);
+        const APPROVAL_BADGE = {
+          pending: ["Em análise","bg-yellow-50 text-gold"],
+          valid: ["Aprovado","bg-green-50 text-success"],
+          rejected: ["Rejeitado — envie novamente","bg-red-50 text-danger"],
+          expired: ["Vencido","bg-red-50 text-danger"],
+        };
         return h(PrivateLayout,null,
           h(Card,null,
             h("h1",{className:"font-serif text-4xl font-black"},"Documentos"),
@@ -1285,15 +1293,17 @@
             docs.length
               ? docs.map(d=>{
                   const st=docStatus(d);
+                  const ab=APPROVAL_BADGE[d.status]||APPROVAL_BADGE.pending;
                   return h("div",{key:d.id,className:"mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm"},
                     h("div",null,
                       h("p",{className:"font-semibold"},docLabel(d.tipo)),
                       h("p",{className:"text-xs text-slate-500"},d.filename)),
-                    h("div",{className:"flex items-center gap-3"},
+                    h("div",{className:"flex flex-wrap items-center gap-3"},
+                      h("span",{className:`rounded-full px-2 py-1 text-xs font-bold ${ab[1]}`},ab[0]),
                       h("span",{className:`text-xs ${st.cls}`},st.label),
                       h("button",{onClick:()=>download(d),className:"text-xs font-bold text-brand hover:underline"},"Baixar")));
                 })
-              : h("p",{className:"mt-2 text-sm text-slate-500"},"Nenhum documento enviado ainda.")));
+              : h("p",{className:"mt-2 text-sm text-slate-500"},"Nenhum documento enviado ainda. Envie o primeiro acima — após a aprovação ele passa a contar no seu score.")));
       }
 
       // ---------- Escritório ----------
@@ -1373,8 +1383,45 @@
           h(Link,{to:"/",className:"mt-6 inline-flex rounded-lg bg-gold px-5 py-2 font-bold text-navy"},"Voltar ao início")));
       }
       function AuthCallback(){
-        useEffect(()=>{ supabase.auth.exchangeCodeForSession(location.href).finally(()=>window.__route.nav("/painel")); },[]);
-        return h("div",{className:"p-12 text-center"},"Confirmando login...");
+        // Link de redefinição de senha chega com ?type=recovery — nesse caso,
+        // em vez de mandar ao painel, mostramos a tela de nova senha (antes
+        // o fluxo "esqueci minha senha" terminava sem lugar para trocá-la).
+        const recovery = new URLSearchParams(location.search).get("type") === "recovery";
+        const [state,setState]=useState("loading");
+        const [pw,setPw]=useState("");
+        const [pw2,setPw2]=useState("");
+        const [saving,setSaving]=useState(false);
+        useEffect(()=>{
+          supabase.auth.exchangeCodeForSession(location.href).then(({ error })=>{
+            if(!recovery){ window.__route.nav("/painel"); return; }
+            setState(error ? "error" : "form");
+          });
+        },[]);
+        async function save(e){
+          e.preventDefault();
+          if(pw.length<8) return toast("A senha precisa ter no mínimo 8 caracteres.","error");
+          if(pw!==pw2) return toast("As senhas não conferem.","error");
+          setSaving(true);
+          const { error } = await supabase.auth.updateUser({ password: pw });
+          setSaving(false);
+          if(error) return toast(translateError(error.message),"error");
+          toast("Senha atualizada com sucesso.");
+          window.__route.nav("/dashboard");
+        }
+        if(!recovery || state==="loading") return h("div",{className:"p-12 text-center"},"Confirmando acesso...");
+        return h(PublicLayout,null,h("main",{className:"mx-auto max-w-md px-4 py-16"},h(Card,null,
+          state==="error"
+            ? h(React.Fragment,null,
+                h("h1",{className:"font-serif text-3xl font-black"},"Link expirado"),
+                h("p",{className:"mt-3 text-sm text-slate-500"},"Este link de redefinição já foi usado ou expirou. Peça um novo na tela de login."),
+                h(Link,{to:"/login",className:"mt-6 inline-flex rounded-lg bg-gold px-5 py-2 font-bold text-navy"},"Ir para o login"))
+            : h(React.Fragment,null,
+                h("h1",{className:"font-serif text-3xl font-black"},"Definir nova senha"),
+                h("p",{className:"mt-2 text-sm text-slate-500"},"Escolha a nova senha da sua conta Crivo."),
+                h("form",{onSubmit:save,className:"mt-6 space-y-4"},
+                  h(Field,{label:"Nova senha",hint:"Mínimo de 8 caracteres."},h(Input,{type:"password",value:pw,onChange:e=>setPw(e.target.value),required:true,autoComplete:"new-password"})),
+                  h(Field,{label:"Confirmar nova senha",error:pw2&&pw!==pw2?"As senhas não conferem.":null},h(Input,{type:"password",value:pw2,onChange:e=>setPw2(e.target.value),required:true,autoComplete:"new-password"})),
+                  h(Button,{type:"submit",disabled:saving,className:"w-full"},saving?"Salvando...":"Salvar nova senha"))))));
       }
 
       // ---------- Administração (curadoria do diretório) ----------
@@ -1404,7 +1451,10 @@
         async function setDocStatus(d, status) {
           const { error } = await supabase.from("documents").update({ status }).eq("id", d.id);
           if (error) return toast(adminError(error), "error");
-          toast(status === "valid" ? "Documento aprovado." : "Documento rejeitado.");
+          // A dimensão Documentação só conta documentos aprovados — recalcula
+          // o score da empresa assim que a decisão muda.
+          invokeScore({ company_id: company.id, force: true }).catch(logFail("calculate-score"));
+          toast(status === "valid" ? "Documento aprovado. O score da empresa será recalculado." : "Documento rejeitado.");
           onChanged();
         }
         async function download(d) {
