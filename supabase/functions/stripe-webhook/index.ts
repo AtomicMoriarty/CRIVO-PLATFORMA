@@ -23,7 +23,12 @@ serve(async (req) => {
 
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session;
-      await supabase.from("profiles").update({ plan: session.metadata?.plan || "pro" }).eq("id", session.metadata?.user_id);
+      const plan = session.metadata?.plan;
+      const userId = session.metadata?.user_id;
+      const validPlans = ["pro", "premium"];
+      if (userId && validPlans.includes(plan || "")) {
+        await supabase.from("profiles").update({ plan }).eq("id", userId);
+      }
     }
 
     if (event.type === "customer.subscription.deleted") {

@@ -163,6 +163,9 @@
         if (s < 86400) return `há ${Math.floor(s / 3600)} h`;
         return `há ${Math.floor(s / 86400)} d`;
       }
+      function logFail(label) {
+        return (err) => console.error(`[crivo] ${label} falhou:`, err);
+      }
       function toast(message, type = "ok") {
         window.dispatchEvent(new CustomEvent("toast", { detail: { message, type } }));
       }
@@ -232,8 +235,16 @@
       ];
 
       // ---------- Cadastro pendente (resiliente à confirmação de e-mail) ----------
+      const PENDING_TTL_MS = 7 * 24 * 3600 * 1000;
       function readPending() {
-        try { return JSON.parse(localStorage.getItem(PENDING_KEY) || "null"); } catch { return null; }
+        try {
+          const pending = JSON.parse(localStorage.getItem(PENDING_KEY) || "null");
+          if (pending && Date.now() - (pending._savedAt || 0) > PENDING_TTL_MS) {
+            localStorage.removeItem(PENDING_KEY);
+            return null;
+          }
+          return pending;
+        } catch { return null; }
       }
       async function completeSetup(user, pending) {
         const base = {
@@ -307,6 +318,7 @@
         return h(AuthContext.Provider, { value }, ...childList(children));
       }
       function useAuth() { return useContext(AuthContext); }
+      const PRIVATE_PATHS = ["/dashboard", "/documentos", "/admin"];
       function useRoute() {
         const [path, setPath] = useState(location.pathname);
         useEffect(() => {
@@ -314,6 +326,15 @@
           addEventListener("popstate", onPop);
           return () => removeEventListener("popstate", onPop);
         }, []);
+        useEffect(() => {
+          let meta = document.querySelector('meta[name="robots"]');
+          if (!meta) {
+            meta = document.createElement("meta");
+            meta.setAttribute("name", "robots");
+            document.head.appendChild(meta);
+          }
+          meta.setAttribute("content", PRIVATE_PATHS.includes(path) ? "noindex, nofollow" : "index, follow");
+        }, [path]);
         const nav = (to) => { history.pushState({}, "", to); setPath(location.pathname); scrollTo(0,0); };
         return { path, nav };
       }
@@ -626,7 +647,7 @@
           if(!f.empresa.trim()) return toast("Informe o nome da empresa.","error");
           setLoading(true);
           const { error } = await supabase.from("leads").insert({ tipo:"diagnostico", source:"diagnostico", nome:f.nome, email:f.email, empresa:f.empresa, origem:"landing_diagnostico", status:"novo" });
-          supabase.functions.invoke("send-email",{ body:{ tipo:"diagnostico", email:f.email, nome:f.nome, subject:"✓ Diagnóstico solicitado — Crivo", body:"Recebemos sua solicitação de diagnóstico da Reforma Tributária. Nossa equipe entrará em contato em até 2 dias úteis." } }).catch(()=>null);
+          supabase.functions.invoke("send-email",{ body:{ tipo:"diagnostico", email:f.email, nome:f.nome, subject:"✓ Diagnóstico solicitado — Crivo", body:"Recebemos sua solicitação de diagnóstico da Reforma Tributária. Nossa equipe entrará em contato em até 2 dias úteis." } }).catch(logFail("e-mail de diagnóstico"));
           setLoading(false);
           if(error) return toast(translateError(error.message),"error");
           setSent(true);
@@ -740,7 +761,7 @@
           if(!company?.id) return;
           supabase.functions.invoke("match-suppliers",{ body:{ buyer_company_id:company.id, limit:6 } }).then(({ data })=>{
             if (Array.isArray(data?.data)) setMatches(data.data.map((m)=>({ ...m, score: m.latest_score?.total ?? null })));
-          }).catch(()=>null);
+          }).catch(logFail("match-suppliers"));
         },[company?.id]);
 
         async function loadTop() {
@@ -804,7 +825,7 @@
           }
           const { error } = await supabase.from("portfolios").insert({ buyer_id:company.id, supplier_id:supplier.id, added_by:session.user.id });
           if (error) return toast(error.message.includes("duplicate") ? "Este fornecedor já está na sua carteira." : translateError(error.message), "error");
-          invokeScore({ company_id:supplier.id }).catch(()=>null);
+          invokeScore({ company_id:supplier.id }).catch(logFail("calculate-score"));
           setSelected(null);
           toast("Fornecedor adicionado à carteira.");
         }
@@ -929,7 +950,7 @@
           if (step < 3) return next();
           for (const s of [1,2,3]) { const err = stepError(s); if (err) { setStep(s); return toast(err, "error"); } }
           setLoading(true);
-          const pending = { email:form.email, nome:form.nome, cnpj:cleanCnpj(form.cnpj), razao_social:form.razao_social, nome_fantasia:form.nome_fantasia, telefone:form.telefone, segmento:form.segmento, plano:form.plano };
+          const pending = { email:form.email, nome:form.nome, cnpj:cleanCnpj(form.cnpj), razao_social:form.razao_social, nome_fantasia:form.nome_fantasia, telefone:form.telefone, segmento:form.segmento, plano:form.plano, _savedAt: Date.now() };
           localStorage.setItem(PENDING_KEY, JSON.stringify(pending));
           const { data: authData, error: authError } = await supabase.auth.signUp({
             email:form.email, password:form.password,
@@ -937,7 +958,7 @@
           });
           if(authError || !authData?.user){ setLoading(false); return toast(translateError(authError?.message || "Erro ao criar usuário"),"error"); }
           supabase.from("leads").insert({ tipo:"cadastro", source:"cadastro", nome:form.nome, email:form.email, cnpj:cleanCnpj(form.cnpj), plano_interesse:form.plano, origem:"organico", status:"novo" }).then(()=>null);
-          supabase.functions.invoke("send-email", { body:{ tipo:"boas-vindas", email:form.email, nome:form.nome, subject:"Bem-vindo ao Crivo", body:"Sua conta Crivo foi criada. Acesse o painel para adicionar seus primeiros fornecedores." }}).catch(()=>null);
+          supabase.functions.invoke("send-email", { body:{ tipo:"boas-vindas", email:form.email, nome:form.nome, subject:"Bem-vindo ao Crivo", body:"Sua conta Crivo foi criada. Acesse o painel para adicionar seus primeiros fornecedores." }}).catch(logFail("e-mail de boas-vindas"));
           if (authData.session) {
             await completeSetup(authData.user, pending);
             setLoading(false);
@@ -1002,7 +1023,7 @@
           if(!/^\S+@\S+\.\S+$/.test(f.email)) return toast("Digite um e-mail válido.","error");
           setLoading(true);
           const { error }=await supabase.from("leads").insert({ tipo:"proposta", source:"proposta", nome:f.nome,email:f.email,empresa:f.empresa,cnpj:cleanCnpj(f.cnpj),telefone:f.telefone,plano_interesse:f.plano,mensagem:f.mensagem,status:"novo" });
-          supabase.functions.invoke("send-email",{body:{tipo:"proposta-recebida",email:f.email,nome:f.nome,subject:"Recebemos sua proposta — Crivo",body:"Recebemos sua mensagem. Nossa equipe comercial entrará em contato em até 2 dias úteis."}}).catch(()=>null);
+          supabase.functions.invoke("send-email",{body:{tipo:"proposta-recebida",email:f.email,nome:f.nome,subject:"Recebemos sua proposta — Crivo",body:"Recebemos sua mensagem. Nossa equipe comercial entrará em contato em até 2 dias úteis."}}).catch(logFail("e-mail de proposta recebida"));
           setLoading(false);
           if(error) return toast(translateError(error.message),"error");
           setSent(true);
@@ -1064,7 +1085,7 @@
             }
             const { error: portErr }=await supabase.from("portfolios").insert({buyer_id:company.id,supplier_id:supplier.id,added_by:company.user_id,status:"active"});
             if(portErr) throw new Error(portErr.message.includes("duplicate")?"Este fornecedor já está na sua carteira.":portErr.message);
-            invokeScore({company_id:supplier.id}).catch(()=>null);
+            invokeScore({company_id:supplier.id}).catch(logFail("calculate-score"));
             setCnpj("");
             toast("Fornecedor adicionado à carteira.");
             load();
@@ -1082,14 +1103,14 @@
         }
         async function refreshScore(item){
           toast("Recalculando score...");
-          await invokeScore({company_id:item.id,force:true}).catch(()=>null);
+          await invokeScore({company_id:item.id,force:true}).catch(logFail("calculate-score"));
           load();
         }
         async function markRead(alert){
           const { data } = await supabase.auth.getUser();
           const uid = data?.user?.id;
           if(!uid) return;
-          await supabase.rpc("mark_alert_read",{p_alert_id:alert.id,p_user_id:uid}).catch(()=>null);
+          await supabase.rpc("mark_alert_read",{p_alert_id:alert.id,p_user_id:uid}).catch(logFail("mark_alert_read"));
           setAlerts(a=>a.filter(x=>x.id!==alert.id));
         }
         const high = items.filter(i=>i.score!==null&&Number(i.score)<600).length;
@@ -1153,6 +1174,7 @@
         const [valid,setValid]=useState("");
         const [loading,setLoading]=useState(false);
         const ACCEPTED=[".pdf",".xml",".jpg",".jpeg",".png"];
+        const ACCEPTED_MIME=["application/pdf","text/xml","application/xml","image/jpeg","image/png"];
         const MAX_MB=10;
 
         async function load(){
@@ -1172,6 +1194,7 @@
           if(!f) return setFile(null);
           const ext="."+(f.name.split(".").pop()||"").toLowerCase();
           if(!ACCEPTED.includes(ext)){ e.target.value=""; return toast("Formato não aceito. Use PDF, XML ou imagem (JPG/PNG).","error"); }
+          if(f.type && !ACCEPTED_MIME.includes(f.type)){ e.target.value=""; return toast("Tipo de arquivo não corresponde ao formato esperado.","error"); }
           if(f.size>MAX_MB*1024*1024){ e.target.value=""; return toast(`Arquivo muito grande. Limite: ${MAX_MB}MB.`,"error"); }
           setFile(f);
         }
@@ -1185,7 +1208,7 @@
           if(up.error){setLoading(false);return toast(translateError(up.error.message),"error");}
           const { error }=await supabase.from("documents").insert({company_id:company.id,tipo,filename:file.name,storage_path:path,tamanho:file.size,valid_until:valid||null,validade:valid||null,status:"valid",lgpd_consent:true,lgpd_consent_at:new Date().toISOString()});
           if(error){ setLoading(false); return toast(translateError(error.message),"error"); }
-          invokeScore({company_id:company.id,force:true}).catch(()=>null);
+          invokeScore({company_id:company.id,force:true}).catch(logFail("calculate-score"));
           setLoading(false); setFile(null); setValid("");
           toast("Documento enviado! Seu score está sendo recalculado.");
           load();
@@ -1245,7 +1268,7 @@
           if(!/^\S+@\S+\.\S+$/.test(f.email)) return toast("Digite um e-mail válido.","error");
           setLoading(true);
           const {error}=await supabase.from("leads").insert({tipo:"parceiro_contador",source:"parceiro",nome:f.nome,email:f.email,crc:f.crc,escritorio:f.escritorio,qtd_clientes_pj:Number(f.qtd)||0,telefone:f.telefone,canal_aquisicao:f.canal,status:"novo"});
-          supabase.functions.invoke("send-email",{body:{tipo:"parceiro-contador-recebido",email:f.email,nome:f.nome,subject:"Recebemos sua solicitação de parceria — Crivo",body:"Recebemos sua solicitação de parceria. Entraremos em contato para seu onboarding como parceiro Crivo."}}).catch(()=>null);
+          supabase.functions.invoke("send-email",{body:{tipo:"parceiro-contador-recebido",email:f.email,nome:f.nome,subject:"Recebemos sua solicitação de parceria — Crivo",body:"Recebemos sua solicitação de parceria. Entraremos em contato para seu onboarding como parceiro Crivo."}}).catch(logFail("e-mail de parceria"));
           setLoading(false);
           if(error) return toast(translateError(error.message),"error");
           setSent(true);
