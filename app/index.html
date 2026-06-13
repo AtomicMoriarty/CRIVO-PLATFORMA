@@ -569,6 +569,7 @@
         "/diretorio": "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3",
         "/planos": "M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z",
         "/conta": "M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2 M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8",
+        "/contador": "M20 7h-4V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z M8 7V5h8v2",
         "/admin": "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z",
       };
       function NavIcon({ d }) {
@@ -774,6 +775,7 @@
         const { user, profile, company, signOut } = useAuth();
         const path = window.__route.path;
         const links = [["/dashboard","Visão Geral"],["/documentos","Documentos"],["/diretorio","Diretório"],["/conta","Minha conta"]];
+        if (profile?.role === "accountant") links.splice(1, 0, ["/contador","Meus clientes"]);
         if (profile?.role === "admin") links.push(["/admin","Administração"]);
         const initial = ((company?.razao_social || user?.email || "C").trim()[0] || "C").toUpperCase();
         const plan = profile?.plan || "free";
@@ -2091,6 +2093,120 @@
                 : h(Button, { onClick:()=>onSetListed(company, true) }, "Publicar no diretório"),
               h(Button, { variant:"ghost", onClick:onClose }, "Fechar"))));
       }
+      // ---------- Painel do contador (multiempresa) ----------
+      function FinancialModal({ company, onClose, onSaved }) {
+        const { user } = useAuth();
+        const dialogRef = useModalA11y(onClose);
+        const [fin, setFin] = useState({ rentabilidade:"", liquidez:"", endividamento:"", nota:"" });
+        const [saving, setSaving] = useState(false);
+        async function save() {
+          const r = Number(fin.rentabilidade), l = Number(fin.liquidez), e = Number(fin.endividamento);
+          if ([r,l,e].some((v)=>!isFinite(v)||v<0||v>100)) return toast("Informe percentis de 0 a 100 nas três dimensões.", "error");
+          setSaving(true);
+          const calc = calcFinancial({ rentabilidade:r, liquidez:l, endividamento:e });
+          const { error } = await supabase.from("financial_scores").insert({ company_id:company.id, ...calc, nota:fin.nota||null, created_by:user?.id||null });
+          setSaving(false);
+          if (error) return toast(/row-level security/i.test(error.message) ? "Você não tem permissão para registrar a saúde financeira deste cliente." : translateError(error.message), "error");
+          toast("Saúde financeira registrada.");
+          onSaved();
+        }
+        return h("div", { className:"fixed inset-0 z-50 overflow-y-auto bg-black/70 p-4 backdrop-blur-sm", onClick:(e)=>{ if(e.target===e.currentTarget) onClose(); } },
+          h("div", { ref:dialogRef, role:"dialog", "aria-modal":"true", tabIndex:-1, className:"modal-in mx-auto my-8 w-full max-w-lg rounded-xl border border-slate-200 bg-navy p-6 outline-none" },
+            h("p", { className:"mono-label text-gold" }, "Saúde Financeira (Painel Receita)"),
+            h("h2", { className:"mt-1 font-serif text-2xl font-black" }, company.razao_social),
+            h("p", { className:"mt-2 text-sm text-slate-400" }, "Com o Painel Receita do cliente em mãos, informe o percentil (0–100) de cada dimensão vs. o setor. Os valores em R$ não são armazenados."),
+            h("div", { className:"mt-4 grid gap-3 sm:grid-cols-3" },
+              [["rentabilidade","Rentabilidade (P)"],["liquidez","Liquidez (P)"],["endividamento","Endividamento (P)"]].map(([k,label])=>
+                h(Field, { key:k, label }, h(Input, { type:"number", min:0, max:100, value:fin[k], onChange:(ev)=>setFin((f)=>({...f,[k]:ev.target.value})), placeholder:"0–100" })))),
+            h("p", { className:"mt-2 text-[10px] text-slate-500" }, "Endividamento: percentil do Painel. Menos dívida = melhor (o cálculo inverte)."),
+            h("textarea", { className:"mt-3 w-full rounded-lg border p-2 text-sm", rows:2, placeholder:"Nota (opcional) — ex.: ano-base 2025", value:fin.nota, onChange:(ev)=>setFin((f)=>({...f,nota:ev.target.value})) }),
+            h("div", { className:"mt-5 flex justify-end gap-2" },
+              h(Button, { variant:"ghost", onClick:onClose }, "Cancelar"),
+              h(Button, { onClick:save, disabled:saving }, saving ? "Salvando..." : "Registrar"))));
+      }
+      function ContadorPanel() {
+        const { user, profile } = useAuth();
+        const [clients, setClients] = useState([]);
+        const [loaded, setLoaded] = useState(false);
+        const [cnpj, setCnpj] = useState("");
+        const [adding, setAdding] = useState(false);
+        const [selected, setSelected] = useState(null);
+        const [finFor, setFinFor] = useState(null);
+        const isAccountant = profile?.role === "accountant" || profile?.role === "admin";
+        async function load() {
+          const { data: links } = await supabase.from("company_users").select("company_id, role").eq("user_id", user.id);
+          const ids = (links || []).filter((l)=>["accountant","owner"].includes(l.role)).map((l)=>l.company_id);
+          if (!ids.length) { setClients([]); setLoaded(true); return; }
+          const { data: comps } = await supabase.from("companies").select("*, scores(total,calculated_at), financial_scores(total,created_at)").in("id", ids);
+          const latest = (arr, key) => Array.isArray(arr) && arr.length ? [...arr].sort((a,b)=>Date.parse(b[key])-Date.parse(a[key]))[0] : null;
+          setClients((comps||[]).map((c)=>({ ...c, conformidade: latest(c.scores,"calculated_at")?.total ?? null, financeira: latest(c.financial_scores,"created_at")?.total ?? null })));
+          setLoaded(true);
+        }
+        useEffect(()=>{ if (isAccountant && user) load(); }, [isAccountant, user?.id]);
+        async function addClient(e) {
+          e.preventDefault();
+          if (!validCnpj(cnpj)) return toast("Digite um CNPJ válido.", "error");
+          setAdding(true);
+          try {
+            const clean = cleanCnpj(cnpj);
+            const { data: existing } = await supabase.from("companies").select("*").eq("cnpj", clean).maybeSingle();
+            let comp = existing;
+            if (!comp) {
+              const { data, error } = await invokeScore({ cnpj: clean, modo:"preview" });
+              if (error || data?.error || !data?.company) throw new Error(data?.error || error?.message || "Não foi possível consultar este CNPJ.");
+              comp = data.company;
+            }
+            const { error: linkErr } = await supabase.from("company_users").insert({ company_id: comp.id, user_id: user.id, role: "accountant" });
+            if (linkErr) {
+              if (/row-level security/i.test(linkErr.message)) throw new Error("Esta empresa já tem um responsável no Crivo. Peça ao cliente para autorizar o vínculo.");
+              if (/duplicate/i.test(linkErr.message)) throw new Error("Este cliente já está na sua carteira.");
+              throw new Error(linkErr.message);
+            }
+            invokeScore({ company_id: comp.id }).catch(logFail("calculate-score"));
+            toast("Cliente vinculado ao seu escritório.");
+            setCnpj("");
+            load();
+          } catch (err) { toast(translateError(err.message), "error"); }
+          setAdding(false);
+        }
+        if (!isAccountant) {
+          return h(PrivateLayout, null, h(Card, null,
+            h("h1", { className:"font-serif text-3xl font-black" }, "Painel do contador"),
+            h(Notice, { tone:"warning", className:"mt-4" }, h("span", null, "Esta área é para escritórios de contabilidade parceiros. Sua conta não tem perfil de contador. ", h(Link, { to:"/escritorio", className:"font-bold text-gold hover:underline" }, "Quero ser parceiro")))));
+        }
+        return h(PrivateLayout, null,
+          h("h1", { className:"font-serif text-3xl font-black" }, "Meus clientes"),
+          h("p", { className:"mt-2 text-sm text-slate-500" }, "Acompanhe os dois scores de cada cliente e registre a saúde financeira (Painel Receita) por eles."),
+          h(Card, { className:"mt-5" },
+            h("h2", { className:"flex items-center gap-2 font-bold" }, h("span", { className:"flex h-6 w-6 items-center justify-center rounded-md text-gold", style:{ background:"var(--gold-bg2)" } }, h(Icon, { name:"plus", size:14 })), "Adicionar cliente"),
+            h("p", { className:"mt-1 text-sm text-slate-500" }, "Digite o CNPJ do cliente — buscamos na Receita e vinculamos ao seu escritório. (Se a empresa já tiver dono no Crivo, é preciso autorização dele.)"),
+            h("form", { onSubmit:addClient, className:"mt-4 flex flex-col gap-3 md:flex-row" },
+              h(Input, { value:cnpj, onChange:(e)=>setCnpj(formatCnpj(e.target.value)), placeholder:"00.000.000/0000-00", inputMode:"numeric", "aria-label":"CNPJ do cliente" }),
+              h(Button, { type:"submit", disabled:adding, className:"md:w-44" }, adding ? "Vinculando..." : "Adicionar"))),
+          h(Card, { className:"mt-6 overflow-x-auto" },
+            h("h2", { className:"font-bold" }, "Carteira de clientes"),
+            !loaded
+              ? h("div", { className:"mt-4 space-y-3" }, [1,2,3].map((i)=>h("div",{key:i,className:"skel h-10 w-full"})))
+              : clients.length === 0
+                ? h("p", { className:"mt-4 text-sm text-slate-500" }, "Nenhum cliente ainda. Adicione o primeiro acima para começar a monitorar.")
+                : h("table", { className:"mt-4 w-full text-left text-sm" },
+                    h("thead", null, h("tr", { className:"border-b" }, ["Cliente","CNPJ","Conformidade","Saúde Financeira","Situação","Ações"].map((x)=>h("th",{key:x,className:"py-2 pr-3"},x)))),
+                    h("tbody", null, clients.map((c)=>{
+                      const rr = risk(c.conformidade), fr = finRisk(c.financeira);
+                      return h("tr", { key:c.id, className:"data-row border-b" },
+                        h("td", { className:"py-3 pr-3 font-semibold" }, c.razao_social),
+                        h("td", { className:"pr-3 whitespace-nowrap" }, formatCnpj(c.cnpj)),
+                        h("td", { className:"pr-3" }, c.conformidade!=null ? h("span",{className:`rounded-full px-2 py-1 text-xs font-bold ${rr.soft} ${rr.text}`},Math.round(c.conformidade)) : h("span",{className:"text-xs text-slate-400"},"—")),
+                        h("td", { className:"pr-3 whitespace-nowrap" }, c.financeira!=null ? h("span",{className:`rounded-full px-2 py-1 text-xs font-bold ${fr.soft} ${fr.text}`},`${Math.round(c.financeira)} · ${fr.label}`) : h("span",{className:"text-xs text-slate-400"},"não informada")),
+                        h("td", { className:"pr-3" }, h("span",{className:c.situacao_rfb==="ativa"?"text-success":"text-danger"}, c.situacao_rfb||"—")),
+                        h("td", { className:"whitespace-nowrap" },
+                          h("button", { onClick:()=>setSelected(c), className:"mr-3 text-xs font-bold text-brand hover:underline" }, "Ver análise"),
+                          h("button", { onClick:()=>setFinFor(c), className:"text-xs font-bold text-gold hover:underline" }, "Saúde financeira")));
+                    }))),
+            h(ScoreDisclaimer)),
+          selected && h(KypModal, { company:selected, onClose:()=>setSelected(null) }),
+          finFor && h(FinancialModal, { company:finFor, onClose:()=>setFinFor(null), onSaved:()=>{ setFinFor(null); load(); } }));
+      }
       function AdminPage() {
         const { profile } = useAuth();
         const [rows, setRows] = useState([]);
@@ -2204,7 +2320,7 @@
           "/termos": Termos,
           "/auth/callback": AuthCallback,
         };
-        const privateMap = { "/painel":Painel, "/dashboard":Dashboard, "/documentos":Documents, "/conta":MinhaConta, "/admin":AdminPage };
+        const privateMap = { "/painel":Painel, "/dashboard":Dashboard, "/documentos":Documents, "/conta":MinhaConta, "/contador":ContadorPanel, "/admin":AdminPage };
         if (path.startsWith("/empresa/")) return h(AuthProvider,null,h(Toasts),h("div",{key:path,className:"page-enter"},h(CompanyPage)));
         if (privateMap[path]) return h(AuthProvider,null,h(Toasts),h(Protected,null,h("div",{key:path,className:"page-enter"},h(privateMap[path]))));
         const Page = publicMap[path] || NotFound;
