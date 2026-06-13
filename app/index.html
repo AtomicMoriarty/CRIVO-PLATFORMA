@@ -1379,6 +1379,45 @@
               tab==="plano" && h(PlanoTab, { user, profile, company }),
               tab==="seguranca" && h(SegurancaTab))));
       }
+      function MyAccountantCard({ company }) {
+        const [email, setEmail] = useState("");
+        const [busy, setBusy] = useState(false);
+        const [list, setList] = useState([]);
+        async function load() {
+          if (!company) return;
+          const { data } = await supabase.rpc("list_company_accountants", { p_company_id: company.id });
+          setList(data || []);
+        }
+        useEffect(() => { load(); }, [company?.id]);
+        async function invite(e) {
+          e.preventDefault();
+          if (!/^\S+@\S+\.\S+$/.test(email)) return toast("Digite um e-mail válido.", "error");
+          setBusy(true);
+          const { data, error } = await supabase.rpc("invite_accountant", { p_company_id: company.id, p_email: email });
+          setBusy(false);
+          if (error) return toast(translateError(error.message), "error");
+          const msg = { ok:"Contador vinculado com sucesso.", forbidden:"Você não tem permissão para isso.", not_found:"Não encontramos uma conta com esse e-mail. Peça para o contador se cadastrar como escritório parceiro.", not_accountant:"Essa conta não é de contador. Peça para se cadastrar como escritório parceiro em /escritorio." }[data] || "Não foi possível convidar.";
+          toast(msg, data === "ok" ? "ok" : "error");
+          if (data === "ok") { setEmail(""); load(); }
+        }
+        async function remove(uid) {
+          if (!confirm("Remover o acesso deste contador?")) return;
+          const { error } = await supabase.from("company_users").delete().eq("company_id", company.id).eq("user_id", uid);
+          if (error) return toast(translateError(error.message), "error");
+          toast("Acesso do contador removido.");
+          load();
+        }
+        return h(Card, null,
+          h("h2", { className:"font-bold" }, "Meu contador"),
+          h("p", { className:"mt-1 text-sm text-slate-500" }, "Dê acesso ao seu escritório de contabilidade para gerenciar seus documentos e registrar a saúde financeira (Painel Receita) por você."),
+          list.length > 0 && h("div", { className:"mt-3 space-y-2" }, list.map((a) =>
+            h("div", { key:a.user_id, className:"flex items-center justify-between gap-2 rounded-lg border p-2 text-sm" },
+              h("div", { className:"min-w-0" }, h("p", { className:"truncate font-semibold" }, a.full_name || a.email), a.full_name && h("p", { className:"truncate text-xs text-slate-500" }, a.email)),
+              h("button", { onClick:()=>remove(a.user_id), className:"shrink-0 text-xs font-bold text-danger hover:underline" }, "Remover")))),
+          h("form", { onSubmit:invite, className:"mt-3 flex flex-col gap-2 sm:flex-row" },
+            h(Input, { type:"email", value:email, onChange:(e)=>setEmail(e.target.value), placeholder:"e-mail do contador parceiro" }),
+            h(Button, { type:"submit", disabled:busy, className:"sm:w-40" }, busy ? "Convidando..." : "Convidar")));
+      }
       function PerfilTab({ user, profile, company, refresh }) {
         const [name, setName] = useState(profile?.full_name || profile?.display_name || "");
         const [saving, setSaving] = useState(false);
@@ -1412,7 +1451,8 @@
                 h("div", { key:k }, h("p", { className:"mono-label text-slate-500" }, k), h("p", { className:"mt-1 truncate font-semibold" }, v)))),
             company.listed
               ? h(Link, { to:`/empresa/${cleanCnpj(company.cnpj)}`, className:"mt-4 inline-flex text-sm font-bold text-gold hover:underline" }, "Ver minha página pública →")
-              : h(Link, { to:"/documentos", className:"mt-4 inline-flex text-sm font-bold text-gold hover:underline" }, "Enviar documentos para publicar →")));
+              : h(Link, { to:"/documentos", className:"mt-4 inline-flex text-sm font-bold text-gold hover:underline" }, "Enviar documentos para publicar →")),
+          company && h(MyAccountantCard, { company }));
       }
       function PlanoTab({ user, profile, company }) {
         const [busy, setBusy] = useState(null);
@@ -1490,8 +1530,93 @@
         return h("div",{className:"p-12 text-center text-slate-500"},"Redirecionando...");
       }
 
-      // ---------- Dashboard (carteira) ----------
+      // ---------- Visão Geral: roteia pelo papel (fornecedor / comprador / contador / admin) ----------
       function Dashboard() {
+        const { profile } = useAuth();
+        const role = profile?.role;
+        useEffect(() => { if (role === "accountant") window.__route.nav("/contador"); }, [role]);
+        if (role === "accountant") return h(PrivateLayout, null, h("div", { className:"p-12 text-center text-slate-500" }, "Abrindo Meus clientes..."));
+        if (role === "supplier") return h(SupplierPanel);
+        if (role === "admin") return h(AdminHome);
+        return h(BuyerPanel);
+      }
+      // ---------- Painel do Fornecedor ----------
+      function SupplierPanel() {
+        const { company } = useAuth();
+        const [score, setScore] = useState(null);
+        const [fin, setFin] = useState(null);
+        const [docs, setDocs] = useState([]);
+        const [alerts, setAlerts] = useState([]);
+        const [loaded, setLoaded] = useState(false);
+        useEffect(() => {
+          if (!company) { setLoaded(true); return; }
+          (async () => {
+            const { data: sc } = await supabase.from("scores").select("*").eq("company_id", company.id).order("calculated_at", { ascending:false }).limit(1).maybeSingle();
+            setScore(sc || null);
+            const { data: fsc } = await supabase.from("financial_scores").select("*").eq("company_id", company.id).order("created_at", { ascending:false }).limit(1).maybeSingle();
+            setFin(fsc || null);
+            const { data: dl } = await supabase.from("documents").select("tipo,status").eq("company_id", company.id);
+            setDocs(dl || []);
+            const { data: al } = await supabase.from("alerts").select("*").eq("resolved", false).order("created_at", { ascending:false }).limit(8);
+            setAlerts(al || []);
+            setLoaded(true);
+          })();
+        }, [company?.id]);
+        const requiredDone = Object.entries(DOC_META).filter(([k,m]) => m.required && docs.some((d) => d.tipo===k && d.status==="valid")).length;
+        const rr = risk(score?.total), fr = finRisk(fin?.total);
+        const tone = (v) => v==null ? "muted" : v>=800 ? "success" : v>=600 ? "gold" : "danger";
+        return h(PrivateLayout, null,
+          h("h1", { className:"font-serif text-3xl font-black" }, "Visão Geral"),
+          h("p", { className:"mt-2 text-sm text-slate-500" }, company ? company.razao_social : "Sua empresa"),
+          company && !company.listed && h(Notice, { tone:"gold", className:"mt-4" }, h("span", null, "Sua empresa ainda não está publicada no diretório. ", h(Link, { to:"/documentos", className:"font-bold text-gold hover:underline" }, "Envie os documentos obrigatórios"), " para a equipe Crivo analisar.")),
+          h("div", { className:"mt-5 grid grid-cols-2 gap-4 md:grid-cols-4" },
+            h(StatCard, { label:"Score de Conformidade", value: score?.total!=null ? h(CountUp,{value:score.total}) : "—", icon:"shield", tone:tone(score?.total), accent: score?.total!=null?rr.text:"", foot: score?.total!=null?rr.label:"aguardando dados" }),
+            h(StatCard, { label:"Saúde Financeira", value: fin?.total!=null ? h(CountUp,{value:fin.total}) : "—", icon:"gem", tone:tone(fin?.total), accent: fin?.total!=null?fr.text:"", foot: fin?.total!=null?fr.label:"via Painel Receita" }),
+            h(StatCard, { label:"Documentos obrigatórios", value:`${requiredDone}/${REQUIRED_DOC_COUNT}`, icon:"check", tone: requiredDone>=REQUIRED_DOC_COUNT?"success":"muted", foot: requiredDone>=REQUIRED_DOC_COUNT?"completo":"faltam alguns" }),
+            h(StatCard, { label:"No diretório", value: company?.listed?"Publicada":"Em análise", icon:"star", tone: company?.listed?"success":"gold", foot: company?.listed?"visível a contratantes":"após análise" })),
+          h(Card, { className:"mt-6" },
+            h("h2", { className:"font-bold" }, "Sua presença no Crivo"),
+            h("div", { className:"mt-3 flex flex-wrap gap-3" },
+              h(Link, { to:"/documentos", className:"rounded-lg bg-gold px-4 py-2 text-sm font-bold text-navy" }, "Enviar documentos"),
+              company && h(Link, { to:`/empresa/${cleanCnpj(company.cnpj)}`, className:"rounded-lg border px-4 py-2 text-sm font-bold hover:border-gold/40 hover:text-gold" }, company.listed ? "Ver minha página pública" : "Pré-visualizar minha página")),
+            h(ScoreDisclaimer)),
+          h(Card, { className:"mt-6" },
+            h("h2", { className:"font-bold" }, "Alertas recentes"),
+            alerts.length
+              ? alerts.map((a) => { const sev=SEVERITY[a.severity]||SEVERITY.low; return h("div", { key:a.id, className:"data-row mt-3 flex items-start gap-2 rounded-lg bg-slate-50 p-3 text-sm" }, h("span",{className:`mt-1.5 h-2 w-2 shrink-0 rounded-full ${sev.dot}`}), h("div",null, h("strong",null,a.title), h("p",{className:"text-slate-600"},a.description), h("p",{className:"mt-1 text-xs text-slate-400"},timeAgo(a.created_at)))); })
+              : h("p", { className:"mt-2 text-sm text-slate-500" }, loaded ? "Nenhum alerta. O monitoramento diário avisa se algo mudar." : "Carregando...")));
+      }
+      // ---------- Painel do Administrador (Porto & Pacca — vê tudo) ----------
+      function AdminHome() {
+        const [s, setS] = useState(null);
+        useEffect(() => {
+          (async () => {
+            const [c1, c2, c3, c4] = await Promise.all([
+              supabase.from("companies").select("*", { count:"exact", head:true }),
+              supabase.from("companies").select("*", { count:"exact", head:true }).eq("listed", true),
+              supabase.from("documents").select("*", { count:"exact", head:true }).eq("status", "pending"),
+              supabase.from("alerts").select("*", { count:"exact", head:true }).eq("resolved", false),
+            ]);
+            setS({ companies:c1.count||0, published:c2.count||0, pendingDocs:c3.count||0, alerts:c4.count||0 });
+          })();
+        }, []);
+        return h(PrivateLayout, null,
+          h("h1", { className:"font-serif text-3xl font-black" }, "Visão Geral — Administração"),
+          h("p", { className:"mt-2 text-sm text-slate-500" }, "Porto & Pacca · visão geral da plataforma. Você enxerga todas as empresas, scores e documentos."),
+          h("div", { className:"mt-5 grid grid-cols-2 gap-4 md:grid-cols-4" },
+            h(StatCard, { label:"Empresas", value: s ? h(CountUp,{value:s.companies}) : "—", icon:"users", tone:"gold" }),
+            h(StatCard, { label:"Publicadas", value: s ? h(CountUp,{value:s.published}) : "—", icon:"star", tone:"success" }),
+            h(StatCard, { label:"Docs pendentes", value: s ? h(CountUp,{value:s.pendingDocs}) : "—", icon:"check", tone: s?.pendingDocs>0?"gold":"muted", foot: s?.pendingDocs>0?"revisar no admin":"em dia" }),
+            h(StatCard, { label:"Alertas ativos", value: s ? h(CountUp,{value:s.alerts}) : "—", icon:"bell", tone: s?.alerts>0?"danger":"muted" })),
+          h(Card, { className:"mt-6" },
+            h("h2", { className:"font-bold" }, "Acesso rápido"),
+            h("div", { className:"mt-3 flex flex-wrap gap-3" },
+              h(Link, { to:"/admin", className:"rounded-lg bg-gold px-4 py-2 text-sm font-bold text-navy" }, "Sala de análise"),
+              h(Link, { to:"/diretorio", className:"rounded-lg border px-4 py-2 text-sm font-bold hover:border-gold/40 hover:text-gold" }, "Diretório"),
+              h(Link, { to:"/contador", className:"rounded-lg border px-4 py-2 text-sm font-bold hover:border-gold/40 hover:text-gold" }, "Painel do contador"))));
+      }
+      // ---------- Painel do Comprador (carteira de fornecedores) ----------
+      function BuyerPanel() {
         const { session, company, profile, refresh } = useAuth();
         const [items,setItems]=useState([]);
         const [alerts,setAlerts]=useState([]);
@@ -2099,15 +2224,22 @@
         const dialogRef = useModalA11y(onClose);
         const [fin, setFin] = useState({ rentabilidade:"", liquidez:"", endividamento:"", nota:"" });
         const [saving, setSaving] = useState(false);
+        const [file, setFile] = useState(null);
         async function save() {
           const r = Number(fin.rentabilidade), l = Number(fin.liquidez), e = Number(fin.endividamento);
           if ([r,l,e].some((v)=>!isFinite(v)||v<0||v>100)) return toast("Informe percentis de 0 a 100 nas três dimensões.", "error");
           setSaving(true);
+          if (file) {
+            const path = `${company.id}/painel_receita/${Date.now()}_${file.name.replace(/[^\w.\-]/g,"_")}`;
+            const up = await supabase.storage.from("documents").upload(path, file, { upsert:true });
+            if (up.error) { setSaving(false); return toast(translateError(up.error.message), "error"); }
+            await supabase.from("documents").insert({ company_id:company.id, tipo:"painel_receita", filename:file.name, storage_path:path, tamanho:file.size, status:"pending", lgpd_consent:true, lgpd_consent_at:new Date().toISOString() }).then(({ error }) => { if (error) logFail("doc painel")(error); });
+          }
           const calc = calcFinancial({ rentabilidade:r, liquidez:l, endividamento:e });
           const { error } = await supabase.from("financial_scores").insert({ company_id:company.id, ...calc, nota:fin.nota||null, created_by:user?.id||null });
           setSaving(false);
           if (error) return toast(/row-level security/i.test(error.message) ? "Você não tem permissão para registrar a saúde financeira deste cliente." : translateError(error.message), "error");
-          toast("Saúde financeira registrada.");
+          toast(file ? "Saúde financeira registrada e Painel anexado." : "Saúde financeira registrada.");
           onSaved();
         }
         return h("div", { className:"fixed inset-0 z-50 overflow-y-auto bg-black/70 p-4 backdrop-blur-sm", onClick:(e)=>{ if(e.target===e.currentTarget) onClose(); } },
@@ -2120,6 +2252,7 @@
                 h(Field, { key:k, label }, h(Input, { type:"number", min:0, max:100, value:fin[k], onChange:(ev)=>setFin((f)=>({...f,[k]:ev.target.value})), placeholder:"0–100" })))),
             h("p", { className:"mt-2 text-[10px] text-slate-500" }, "Endividamento: percentil do Painel. Menos dívida = melhor (o cálculo inverte)."),
             h("textarea", { className:"mt-3 w-full rounded-lg border p-2 text-sm", rows:2, placeholder:"Nota (opcional) — ex.: ano-base 2025", value:fin.nota, onChange:(ev)=>setFin((f)=>({...f,nota:ev.target.value})) }),
+            h(Field, { label:"Anexar PDF do Painel Receita (opcional)", hint:"Guarda o relatório na ficha do cliente, para auditoria." }, h("input", { type:"file", accept:".pdf,.png,.jpg,.jpeg", onChange:(ev)=>setFile(ev.target.files[0]||null), className:"mt-1 w-full rounded-lg border p-2 text-sm" })),
             h("div", { className:"mt-5 flex justify-end gap-2" },
               h(Button, { variant:"ghost", onClick:onClose }, "Cancelar"),
               h(Button, { onClick:save, disabled:saving }, saving ? "Salvando..." : "Registrar"))));
