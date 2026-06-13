@@ -536,6 +536,7 @@
         "/documentos": "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM14 2v6h6",
         "/diretorio": "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3",
         "/planos": "M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z",
+        "/conta": "M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2 M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8",
         "/admin": "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z",
       };
       function NavIcon({ d }) {
@@ -558,6 +559,7 @@
         users: ["M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2", "M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8", "M23 21v-2a4 4 0 0 0-3-3.87", "M16 3.13a4 4 0 0 1 0 7.75"],
         gem: ["M6 3h12l4 6-10 13L2 9z", "M11 3 8 9l4 13 4-13-3-6", "M2 9h20"],
         plus: ["M12 5v14", "M5 12h14"],
+        userOne: ["M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2", "M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8"],
       };
       function Icon({ name, size = 16, className = "" }) {
         const paths = ICONS[name];
@@ -697,7 +699,7 @@
       function PrivateLayout({ children }) {
         const { user, profile, company, signOut } = useAuth();
         const path = window.__route.path;
-        const links = [["/dashboard","Visão Geral"],["/documentos","Documentos"],["/diretorio","Diretório"],["/planos","Planos"]];
+        const links = [["/dashboard","Visão Geral"],["/documentos","Documentos"],["/diretorio","Diretório"],["/conta","Minha conta"]];
         if (profile?.role === "admin") links.push(["/admin","Administração"]);
         const initial = ((company?.razao_social || user?.email || "C").trim()[0] || "C").toUpperCase();
         const plan = profile?.plan || "free";
@@ -718,7 +720,7 @@
                 h("button", { onClick:signOut, className:"mt-3 w-full rounded-md border border-white/10 px-3 py-1.5 text-xs text-slate-300 hover:border-danger/50 hover:text-danger" }, "Sair da conta")))),
           h("main", { className:"min-w-0 flex-1" },
             h("div", { className:"glass sticky top-0 z-30 flex items-center justify-between gap-3 border-b px-5 py-3" },
-              h("div", { className:"flex min-w-0 items-center gap-3" },
+              h(Link, { to:"/conta", className:"flex min-w-0 items-center gap-3 hover:opacity-90", title:"Minha conta" },
                 h("span", { className:"avatar-chip shrink-0 md:hidden" }, initial),
                 h("div", { className:"min-w-0" }, h("p", { className:"mono-label text-slate-500" }, "Conta"), h("p", { className:"max-w-[200px] truncate font-semibold md:max-w-md" }, company?.razao_social || user?.email || "Crivo"))),
               h("button", { onClick:signOut, className:"inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm hover:border-gold/40 hover:text-gold" }, "Sair")),
@@ -1198,8 +1200,11 @@
       // ---------- Planos / Proposta ----------
       function Planos() {
         const { session } = useAuth();
-        const Layout = session ? PrivateLayout : PublicLayout;
-        return h(Layout,null,h(PlansSection),h(ProposalForm));
+        // Logado: planos e pagamentos vivem em "Minha conta" — sem o marketing
+        // ("Falar com comercial") dentro do painel. Visitante vê a página de vendas.
+        useEffect(()=>{ if(session) window.__route.nav("/conta?tab=plano"); },[session]);
+        if (session) return h("div",{className:"p-12 text-center text-slate-500"},"Abrindo Minha conta...");
+        return h(PublicLayout,null,h(PlansSection),h(ProposalForm));
       }
       function ProposalForm() {
         const [f,setF]=useState({nome:"",email:"",empresa:"",cnpj:"",telefone:"",plano:"pro",mensagem:""});
@@ -1227,6 +1232,134 @@
                 h(Field,{label:"Plano"},h(Select,{value:f.plano,onChange:e=>u("plano",e.target.value)},[["pro","Pro"],["premium","Premium"]].map(([v,l])=>h("option",{key:v,value:v},l)))),
                 h("textarea",{className:"md:col-span-2 rounded-lg border p-3",rows:3,placeholder:"Mensagem",value:f.mensagem,onChange:e=>u("mensagem",e.target.value)}),
                 h(Button,{type:"submit",disabled:loading,className:"md:col-span-2"},loading?"Enviando...":"Enviar proposta"))));
+      }
+
+      // ---------- Minha conta (perfil · plano · segurança) ----------
+      function MinhaConta() {
+        const { user, profile, company, refresh } = useAuth();
+        const [tab, setTab] = useState("perfil");
+        useEffect(()=>{
+          const p = new URLSearchParams(location.search);
+          if (p.get("checkout")==="success"){ toast("Assinatura ativada com sucesso."); history.replaceState({}, "", "/conta"); refresh(); }
+          if (["perfil","plano","seguranca"].includes(p.get("tab"))) setTab(p.get("tab"));
+        },[]);
+        const tabs = [["perfil","Perfil","userOne"],["plano","Plano & pagamentos","gem"],["seguranca","Segurança","shield"]];
+        return h(PrivateLayout, null,
+          h("div", { className:"mx-auto max-w-4xl" },
+            h("h1", { className:"font-serif text-3xl font-black" }, "Minha conta"),
+            h("p", { className:"mt-2 text-sm text-slate-500" }, "Gerencie seu perfil, seu plano e a segurança da sua conta Crivo."),
+            h("div", { className:"mt-6 grid grid-cols-3 gap-1 rounded-xl border border-slate-200 bg-white p-1" }, tabs.map(([id,label,icon]) =>
+              h("button", { key:id, onClick:()=>setTab(id),
+                className:`flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition ${tab===id ? "bg-gold text-navy" : "text-slate-400 hover:text-gold"}` },
+                h(Icon, { name:icon, size:15 }), h("span", { className:"hidden sm:inline" }, label)))),
+            h("div", { className:"mt-6" },
+              tab==="perfil" && h(PerfilTab, { user, profile, company, refresh }),
+              tab==="plano" && h(PlanoTab, { user, profile, company }),
+              tab==="seguranca" && h(SegurancaTab))));
+      }
+      function PerfilTab({ user, profile, company, refresh }) {
+        const [name, setName] = useState(profile?.full_name || profile?.display_name || "");
+        const [saving, setSaving] = useState(false);
+        const roleLabel = { buyer:"Contratante", supplier:"Fornecedor", accountant:"Contador", admin:"Administrador" }[profile?.role] || "Usuário";
+        const initial = ((company?.razao_social || user?.email || "C").trim()[0] || "C").toUpperCase();
+        const dirty = name.trim() && name.trim() !== (profile?.full_name || profile?.display_name || "");
+        async function save() {
+          setSaving(true);
+          const { error } = await supabase.from("profiles").update({ full_name:name.trim(), display_name:name.trim() }).eq("id", user.id);
+          setSaving(false);
+          if (error) return toast(translateError(error.message), "error");
+          toast("Perfil atualizado."); refresh();
+        }
+        return h("div", { className:"stagger space-y-5" },
+          h(Card, null,
+            h("div", { className:"flex items-center gap-4" },
+              h("span", { className:"avatar-chip", style:{ width:"56px", height:"56px", fontSize:"22px", borderRadius:"14px" } }, initial),
+              h("div", { className:"min-w-0" },
+                h("p", { className:"truncate font-serif text-xl font-black" }, profile?.full_name || profile?.display_name || "Sua conta"),
+                h("p", { className:"truncate text-sm text-slate-500" }, user?.email),
+                h("div", { className:"mt-2 flex flex-wrap gap-2" },
+                  h("span", { className:"mono-label rounded border border-gold/40 bg-yellow-50 px-2 py-0.5 text-gold" }, roleLabel),
+                  h("span", { className:"mono-label rounded border px-2 py-0.5 capitalize text-slate-400" }, `Plano ${profile?.plan || "free"}`)))),
+            h("div", { className:"mt-5 border-t border-white/5 pt-5" },
+              h(Field, { label:"Nome de exibição", hint:"Como você aparece dentro do Crivo." }, h(Input, { value:name, onChange:e=>setName(e.target.value), placeholder:"Seu nome" })),
+              h(Button, { onClick:save, disabled:saving || !dirty, className:"mt-3" }, saving ? "Salvando..." : "Salvar alterações"))),
+          company && h(Card, null,
+            h("h2", { className:"font-bold" }, "Empresa vinculada"),
+            h("div", { className:"mt-4 grid gap-4 sm:grid-cols-2" },
+              [["Razão social", company.razao_social || "—"],["CNPJ", formatCnpj(company.cnpj)],["Segmento", company.segmento || "—"],["Estado", company.estado || "—"],["Situação RFB", company.situacao_rfb || "—"],["No diretório", company.listed ? "Publicada" : "Em análise"]].map(([k,v]) =>
+                h("div", { key:k }, h("p", { className:"mono-label text-slate-500" }, k), h("p", { className:"mt-1 truncate font-semibold" }, v)))),
+            company.listed
+              ? h(Link, { to:`/empresa/${cleanCnpj(company.cnpj)}`, className:"mt-4 inline-flex text-sm font-bold text-gold hover:underline" }, "Ver minha página pública →")
+              : h(Link, { to:"/documentos", className:"mt-4 inline-flex text-sm font-bold text-gold hover:underline" }, "Enviar documentos para publicar →")));
+      }
+      function PlanoTab({ user, profile, company }) {
+        const [busy, setBusy] = useState(null);
+        const current = profile?.plan || "free";
+        const plans = [
+          ["free","Grátis",0,["3 fornecedores","Score parcial","Diretório público"]],
+          ["pro","Pro",297,["50 fornecedores","Alertas automáticos","Documentos e KYP completo"]],
+          ["premium","Premium",897,["Fornecedores ilimitados","Relatórios exportáveis","Escritório e white-label"]],
+        ];
+        async function checkout(id) {
+          if (id === current) return;
+          if (id === "free") return toast("Para reduzir seu plano, fale com a gente em contato@adeke.com.br.");
+          setBusy(id);
+          const { data, error } = await supabase.functions.invoke("create-checkout", { body:{ plano:id, email:user?.email, empresa_id:company?.id, user_id:user?.id, success_url:`${location.origin}/conta?checkout=success`, cancel_url:`${location.origin}/conta?tab=plano` } });
+          setBusy(null);
+          if (error || !data?.url) return toast(data?.error || error?.message ? translateError(data?.error || error?.message) : "Pagamento online em configuração. Para assinar agora, fale com contato@adeke.com.br.", "error");
+          location.href = data.url;
+        }
+        return h("div", { className:"stagger space-y-5" },
+          h(Card, null,
+            h("div", { className:"flex flex-wrap items-center justify-between gap-3" },
+              h("div", null,
+                h("p", { className:"mono-label text-slate-500" }, "Plano atual"),
+                h("p", { className:"mt-1 font-serif text-2xl font-black capitalize" }, current)),
+              h("span", { className:"stat-ic", style:{ width:"48px", height:"48px" } }, h(Icon, { name:"gem", size:22 }))),
+            h("p", { className:"mt-3 text-sm text-slate-500" }, "A cobrança online está em configuração. Para assinar ou trocar de plano agora, fale com ",h("a",{href:"mailto:contato@adeke.com.br",className:"font-bold text-gold hover:underline"},"contato@adeke.com.br")," — ativamos para você.")),
+          h("div", { className:"grid gap-4 md:grid-cols-3" }, plans.map(([id,name,price,items]) =>
+            h("div", { className:"card-lift rounded-xl border border-slate-200 bg-white p-5", style:id===current?{borderColor:"var(--gold-bd2)"}:undefined },
+              h("div", { className:"flex items-center justify-between" },
+                h("h3", { className:"font-serif text-xl font-bold" }, name),
+                id===current && h("span", { className:"mono-label rounded bg-yellow-50 px-2 py-0.5 text-gold" }, "Atual")),
+              h("p", { className:"mt-2 font-serif text-3xl font-black", style:{ color:"var(--gold2)" } }, price ? money.format(price) : "R$ 0", h("span", { className:"font-sans text-sm font-normal text-slate-500" }, " /mês")),
+              h("ul", { className:"mt-4 space-y-1.5 border-t border-white/10 pt-4" }, items.map(it=>h("li", { key:it, className:"flex items-start gap-2 text-sm text-slate-600" }, h("span", { className:"mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-gold", style:{ background:"var(--gold-bg2)" } }, h(Icon, { name:"check", size:9 })), it))),
+              h("button", { onClick:()=>checkout(id), disabled:busy===id || id===current,
+                className:`mt-5 w-full rounded-md px-4 py-2.5 text-sm font-semibold disabled:opacity-60 ${id===current ? "border border-white/15 text-slate-400" : "bg-gold text-navy hover:bg-yellow-500"}` },
+                id===current ? "Seu plano atual" : busy===id ? "Abrindo..." : price ? `Mudar para ${name}` : "Voltar ao grátis")))));
+      }
+      function SegurancaTab() {
+        const { signOut } = useAuth();
+        const [pw,setPw]=useState(""); const [pw2,setPw2]=useState(""); const [saving,setSaving]=useState(false);
+        async function changePw(e){
+          e.preventDefault();
+          if(pw.length<8) return toast("A senha precisa ter no mínimo 8 caracteres.","error");
+          if(pw!==pw2) return toast("As senhas não conferem.","error");
+          setSaving(true);
+          const { error } = await supabase.auth.updateUser({ password: pw });
+          setSaving(false);
+          if(error) return toast(translateError(error.message),"error");
+          setPw(""); setPw2(""); toast("Senha atualizada com sucesso.");
+        }
+        return h("div",{className:"stagger space-y-5"},
+          h(Card,null,
+            h("h2",{className:"font-bold"},"Trocar senha"),
+            h("p",{className:"mt-1 text-sm text-slate-500"},"Defina uma nova senha de acesso à sua conta."),
+            h("form",{onSubmit:changePw,className:"mt-4 grid gap-4 sm:grid-cols-2"},
+              h(Field,{label:"Nova senha",hint:"Mínimo de 8 caracteres."},h(PasswordInput,{value:pw,onChange:e=>setPw(e.target.value),autoComplete:"new-password"}),h(PasswordStrength,{value:pw})),
+              h(Field,{label:"Confirmar nova senha",error:pw2&&pw!==pw2?"As senhas não conferem.":null},h(PasswordInput,{value:pw2,onChange:e=>setPw2(e.target.value),autoComplete:"new-password"})),
+              h("div",{className:"sm:col-span-2"},h(Button,{type:"submit",disabled:saving},saving?"Salvando...":"Salvar nova senha")))),
+          h(Card,null,
+            h("h2",{className:"font-bold"},"Privacidade e dados (LGPD)"),
+            h("p",{className:"mt-1 text-sm text-slate-500"},"Você pode solicitar acesso, correção ou exclusão dos seus dados a qualquer momento."),
+            h("div",{className:"mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm"},
+              h(Link,{to:"/privacidade",className:"font-bold text-gold hover:underline"},"Política de Privacidade"),
+              h(Link,{to:"/termos",className:"font-bold text-gold hover:underline"},"Termos de Uso"),
+              h("a",{href:"mailto:dpo@adeke.com.br",className:"font-bold text-gold hover:underline"},"Falar com o DPO"))),
+          h(Card,null,
+            h("h2",{className:"font-bold"},"Sessão"),
+            h("p",{className:"mt-1 text-sm text-slate-500"},"Encerre sua sessão neste dispositivo."),
+            h("button",{onClick:signOut,className:"mt-3 inline-flex items-center gap-2 rounded-lg border border-danger/40 px-4 py-2 text-sm font-bold text-danger hover:bg-red-50"},h(Icon,{name:"x",size:15}),"Sair da conta")));
       }
 
       // ---------- Painel (rota antiga → redireciona para a Visão Geral) ----------
@@ -1900,7 +2033,7 @@
           "/termos": Termos,
           "/auth/callback": AuthCallback,
         };
-        const privateMap = { "/painel":Painel, "/dashboard":Dashboard, "/documentos":Documents, "/admin":AdminPage };
+        const privateMap = { "/painel":Painel, "/dashboard":Dashboard, "/documentos":Documents, "/conta":MinhaConta, "/admin":AdminPage };
         if (path.startsWith("/empresa/")) return h(AuthProvider,null,h(Toasts),h("div",{key:path,className:"page-enter"},h(CompanyPage)));
         if (privateMap[path]) return h(AuthProvider,null,h(Toasts),h(Protected,null,h("div",{key:path,className:"page-enter"},h(privateMap[path]))));
         const Page = publicMap[path] || NotFound;
