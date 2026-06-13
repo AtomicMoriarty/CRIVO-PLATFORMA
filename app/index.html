@@ -134,10 +134,19 @@
       .data-row{transition:background-color .18s ease}
       .data-row:hover{background:var(--card2)}
       .avatar-chip{display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:10px;background:var(--gold-bg2);color:var(--gold2);border:1px solid var(--gold-bd);font-family:'Playfair Display',serif;font-weight:700}
-      /* Ondas douradas suaves atrás do hero — movidas por transform (roda na GPU,
-         sem travar) e cobrindo toda a largura. Bem transparentes pra não atrapalhar. */
-      @keyframes waveX{from{transform:translateX(0)}to{transform:translateX(-360px)}}
-      .wave-line{fill:none;stroke:var(--gold2);stroke-linecap:round;animation-name:waveX;animation-timing-function:linear;animation-iteration-count:infinite;will-change:transform}
+      /* Fundo do hero: gradiente escuro animado no tema do Crivo (substitui as ondas).
+         Anima a POSIÇÃO de um gradiente grande — suave, roda na GPU, sem framer-motion.
+         Glows dourado/azul ficam fixos; só a base azul-petróleo flui devagar. */
+      .gradient-bg{
+        background:
+          radial-gradient(820px 400px at 82% -12%, rgba(200,150,58,.18), transparent 60%),
+          radial-gradient(640px 340px at 6% 112%, rgba(46,134,193,.14), transparent 60%),
+          linear-gradient(125deg, #0A1420 0%, #0F2A3F 28%, #14283C 50%, #103A3A 72%, #0A1420 100%);
+        background-size: 100% 100%, 100% 100%, 280% 280%;
+        background-position: 0 0, 0 0, 0% 50%;
+        animation: gradientShift 22s ease infinite;
+      }
+      @keyframes gradientShift{0%,100%{background-position:0 0,0 0,0% 50%}50%{background-position:0 0,0 0,100% 50%}}
       /* Botão flutuante de WhatsApp */
       .wa-fab{transition:transform .2s ease,box-shadow .2s ease}
       .wa-fab:hover{transform:scale(1.08)}
@@ -765,28 +774,10 @@
       }
 
       // ---------- Páginas públicas ----------
-      // Linhas douradas animadas atrás do hero — recriação nativa (SVG + CSS, sem
-      // framer-motion) do efeito "FloatingPaths", no tema do Crivo.
-      function FloatingPaths() {
-        const W = 1440, H = 600, wl = 360; // wl = comprimento de onda (loop translada -wl)
-        const wave = (y, amp) => {
-          let d = `M-720 ${y}`;
-          for (let x = -720; x < W + 720; x += wl) d += ` q ${wl/4} ${-amp}, ${wl/2} 0 t ${wl/2} 0`;
-          return d;
-        };
-        // Ondas distribuídas por toda a altura; velocidades diferentes = parallax suave.
-        const rows = [
-          { y: 70,  amp: 24, dur: 26, op: 0.10, w: 1.2 },
-          { y: 165, amp: 34, dur: 34, op: 0.07, w: 1.0 },
-          { y: 250, amp: 20, dur: 22, op: 0.11, w: 1.3 },
-          { y: 340, amp: 40, dur: 40, op: 0.06, w: 1.0 },
-          { y: 430, amp: 26, dur: 30, op: 0.09, w: 1.2 },
-          { y: 525, amp: 34, dur: 36, op: 0.05, w: 1.0 },
-        ];
-        return h("div", { className:"pointer-events-none absolute inset-0 z-0", "aria-hidden":true },
-          h("svg", { className:"h-full w-full", viewBox:`0 0 ${W} ${H}`, fill:"none", preserveAspectRatio:"none" },
-            rows.map((r, i) => h("path", { key:i, d:wave(r.y, r.amp), className:"wave-line",
-              style:{ stroke:"var(--gold2)", strokeWidth:r.w, strokeOpacity:r.op, animationDuration:r.dur + "s", animationDelay:(-i*4) + "s" } }))));
+      // Fundo do hero: gradiente escuro animado (tema Crivo). Substitui as ondas;
+      // sem framer-motion — a animação vive no CSS (.gradient-bg), suave e na GPU.
+      function GradientBg() {
+        return h("div", { className:"gradient-bg pointer-events-none absolute inset-0 z-0", "aria-hidden":true });
       }
       // Faixa de credibilidade honesta (no lugar de "logos de clientes" inventados):
       // as fontes oficiais que o Crivo realmente cruza.
@@ -835,8 +826,8 @@
       }
       function Home() {
         return h(PublicLayout, null,
-          h("section", { className:"hero-bg bg-navy text-white relative overflow-hidden" },
-            h(FloatingPaths),
+          h("section", { className:"bg-navy text-white relative overflow-hidden" },
+            h(GradientBg),
             h("div", { className:"relative z-10 mx-auto max-w-4xl px-4 pb-12 pt-20 text-center" },
               h("div", { className:"eyebrow mb-7" }, "Avaliação Tributária CBS/IBS · LC 214/2025"),
               h("h1", { className:"font-serif text-5xl font-black leading-[1.05] tracking-tight md:text-7xl" },
