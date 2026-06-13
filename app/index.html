@@ -107,6 +107,33 @@
       .dot-pulse{animation:pulseDot 2.2s infinite}
       @keyframes skeleton{0%{background-position:-220px 0}100%{background-position:220px 0}}
       .skel{background:linear-gradient(90deg,rgba(255,255,255,.05) 25%,rgba(255,255,255,.13) 37%,rgba(255,255,255,.05) 63%);background-size:440px 100%;animation:skeleton 1.3s linear infinite;border-radius:8px}
+      /* Cascata: os filhos diretos entram em sequência — dá vida às telas do painel.
+         fill-mode "backwards" esconde o item só durante o atraso e devolve o controle
+         ao CSS no fim — assim o hover de .card-lift (translateY) continua funcionando. */
+      .stagger>*{animation:fadeUp .5s cubic-bezier(.22,.61,.36,1) backwards}
+      .stagger>*:nth-child(1){animation-delay:.03s}
+      .stagger>*:nth-child(2){animation-delay:.09s}
+      .stagger>*:nth-child(3){animation-delay:.15s}
+      .stagger>*:nth-child(4){animation-delay:.21s}
+      .stagger>*:nth-child(5){animation-delay:.27s}
+      .stagger>*:nth-child(6){animation-delay:.33s}
+      .stagger>*:nth-child(7){animation-delay:.39s}
+      .stagger>*:nth-child(n+8){animation-delay:.45s}
+      .stagger>.fixed{animation:none!important;opacity:1!important;transform:none!important}
+      /* Tiles de indicador (KPI) do painel */
+      .stat-ic{display:flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:11px;background:var(--gold-bg2);color:var(--gold2);border:1px solid var(--gold-bd);transition:transform .3s cubic-bezier(.2,.9,.3,1.2)}
+      .card-lift:hover .stat-ic{transform:scale(1.08) rotate(-5deg)}
+      /* Navegação lateral: barra dourada animada no item ativo/hover */
+      .nav-item{position:relative}
+      .nav-item::before{content:'';position:absolute;left:2px;top:50%;height:0;width:3px;border-radius:3px;background:linear-gradient(var(--gold2),var(--gold));transform:translateY(-50%);transition:height .28s cubic-bezier(.2,.9,.3,1.2)}
+      .nav-item:hover::before{height:34%}
+      .nav-item.active::before{height:62%}
+      .nav-ic{display:inline-flex;transition:transform .2s ease}
+      .nav-item:hover .nav-ic,.nav-item.active .nav-ic{transform:translateX(2px)}
+      /* Linhas e itens de lista interativos */
+      .data-row{transition:background-color .18s ease}
+      .data-row:hover{background:var(--card2)}
+      .avatar-chip{display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:10px;background:var(--gold-bg2);color:var(--gold2);border:1px solid var(--gold-bd);font-family:'Playfair Display',serif;font-weight:700}
       @media (prefers-reduced-motion: reduce){*,*::before,*::after{animation-duration:.001s!important;transition-duration:.001s!important}}
     </style>
   </head>
@@ -487,6 +514,23 @@
           h("div", { className: "skel mt-5 h-2 w-full" }),
           h("div", { className: "skel mt-4 h-8 w-1/2" }));
       }
+      // Tile de indicador (KPI) — rótulo, número grande, ícone em chip e nota de rodapé.
+      const STAT_TONES = {
+        gold:    { bg:"var(--gold-bg2)",        bd:"var(--gold-bd)",          fg:"var(--gold2)" },
+        danger:  { bg:"rgba(224,82,82,.14)",    bd:"rgba(224,82,82,.4)",      fg:"#F07070" },
+        success: { bg:"rgba(61,184,130,.14)",   bd:"rgba(61,184,130,.4)",     fg:"#5DEBA0" },
+        muted:   { bg:"rgba(255,255,255,.06)",  bd:"var(--bd2)",              fg:"var(--muted2)" },
+      };
+      function StatCard({ label, value, icon, accent = "", foot, tone = "gold" }) {
+        const t = STAT_TONES[tone] || STAT_TONES.gold;
+        return h("div", { className:"card-lift rounded-xl border border-slate-200 bg-white p-5" },
+          h("div", { className:"flex items-start justify-between gap-3" },
+            h("div", { className:"min-w-0" },
+              h("p", { className:"mono-label text-slate-500" }, label),
+              h("p", { className:`mt-2 font-serif text-3xl font-black leading-none ${accent}` }, value)),
+            icon && h("span", { className:"stat-ic", style:{ background:t.bg, borderColor:t.bd, color:t.fg } }, h(Icon, { name:icon, size:19 }))),
+          foot && h("div", { className:"mt-3 text-xs text-slate-500" }, foot));
+      }
       const NAV_ICONS = {
         "/dashboard": "M3 12l9-9 9 9M5 10v10h5v-6h4v6h5V10",
         "/documentos": "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM14 2v6h6",
@@ -509,6 +553,11 @@
         eye: ["M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z", "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"],
         eyeOff: ["M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94", "M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19", "M14.12 14.12a3 3 0 1 1-4.24-4.24", "M1 1l22 22"],
         share: ["M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8", "M16 6l-4-4-4 4", "M12 2v13"],
+        shield: ["M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"],
+        bell: ["M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9", "M13.73 21a2 2 0 0 1-3.46 0"],
+        users: ["M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2", "M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8", "M23 21v-2a4 4 0 0 0-3-3.87", "M16 3.13a4 4 0 0 1 0 7.75"],
+        gem: ["M6 3h12l4 6-10 13L2 9z", "M11 3 8 9l4 13 4-13-3-6", "M2 9h20"],
+        plus: ["M12 5v14", "M5 12h14"],
       };
       function Icon({ name, size = 16, className = "" }) {
         const paths = ICONS[name];
@@ -650,17 +699,30 @@
         const path = window.__route.path;
         const links = [["/dashboard","Visão Geral"],["/documentos","Documentos"],["/diretorio","Diretório"],["/planos","Planos"]];
         if (profile?.role === "admin") links.push(["/admin","Administração"]);
+        const initial = ((company?.razao_social || user?.email || "C").trim()[0] || "C").toUpperCase();
+        const plan = profile?.plan || "free";
         return h("div", { className:"min-h-screen bg-slate-100 md:flex" },
-          h("aside", { className:"border-r bg-navy p-4 text-white md:min-h-screen md:w-64" },
-            h(Link, { to:"/", className:"mb-8 flex items-center gap-2 font-serif text-2xl font-black" }, "Crivo", h("span", { className:"text-gold" }, ".")),
-            h("nav", { className:"grid grid-cols-2 gap-2 md:grid-cols-1" }, links.map(([to,label]) =>
-              h(Link, { key:to, to, className:`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm hover:bg-white/10 ${path === to ? "bg-white/10 font-bold text-gold" : "text-slate-300"}` },
-                h(NavIcon, { d: NAV_ICONS[to] || NAV_ICONS["/dashboard"] }), label)))),
-          h("main", { className:"flex-1" },
-            h("div", { className:"flex items-center justify-between border-b bg-white px-5 py-4" },
-              h("div", { className:"min-w-0" }, h("p", { className:"mono-label text-slate-500" }, "Conta"), h("p", { className:"max-w-[180px] truncate font-semibold md:max-w-sm" }, company?.razao_social || user?.email || "Crivo")),
-              h("button", { onClick:signOut, className:"inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-slate-50" }, "Sair")),
-            h("div", { className:"p-5" }, ...childList(children))));
+          h("aside", { className:"border-r bg-navy p-4 text-white md:sticky md:top-0 md:flex md:h-screen md:w-64 md:flex-col md:overflow-y-auto" },
+            h(Link, { to:"/", className:"mb-7 flex items-center gap-2 px-1 font-serif text-2xl font-black" }, "Crivo", h("span", { className:"text-gold" }, ".")),
+            h("p", { className:"mono-label mb-2 hidden px-2 text-slate-500 md:block" }, "Navegação"),
+            h("nav", { className:"grid grid-cols-2 gap-1.5 md:grid-cols-1 md:gap-1" }, links.map(([to,label]) =>
+              h(Link, { key:to, to, className:`nav-item flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm ${path === to ? "active bg-white/10 font-bold text-gold" : "text-slate-300 hover:bg-white/10 hover:text-white"}` },
+                h("span", { className:"nav-ic" }, h(NavIcon, { d: NAV_ICONS[to] || NAV_ICONS["/dashboard"] })), label))),
+            h("div", { className:"mt-auto hidden pt-6 md:block" },
+              h("div", { className:"rounded-lg border border-white/10 bg-white/[.03] p-3" },
+                h("div", { className:"flex items-center gap-2.5" },
+                  h("span", { className:"avatar-chip shrink-0" }, initial),
+                  h("div", { className:"min-w-0" },
+                    h("p", { className:"truncate text-xs font-semibold text-white" }, company?.razao_social || user?.email || "Crivo"),
+                    h("p", { className:"mono-label capitalize text-gold" }, `Plano ${plan}`))),
+                h("button", { onClick:signOut, className:"mt-3 w-full rounded-md border border-white/10 px-3 py-1.5 text-xs text-slate-300 hover:border-danger/50 hover:text-danger" }, "Sair da conta")))),
+          h("main", { className:"min-w-0 flex-1" },
+            h("div", { className:"glass sticky top-0 z-30 flex items-center justify-between gap-3 border-b px-5 py-3" },
+              h("div", { className:"flex min-w-0 items-center gap-3" },
+                h("span", { className:"avatar-chip shrink-0 md:hidden" }, initial),
+                h("div", { className:"min-w-0" }, h("p", { className:"mono-label text-slate-500" }, "Conta"), h("p", { className:"max-w-[200px] truncate font-semibold md:max-w-md" }, company?.razao_social || user?.email || "Crivo"))),
+              h("button", { onClick:signOut, className:"inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm hover:border-gold/40 hover:text-gold" }, "Sair")),
+            h("div", { className:"stagger p-5 md:p-7", key:path }, ...childList(children))));
       }
       function Protected({ children }) {
         const { session, loading } = useAuth();
@@ -955,7 +1017,7 @@
           matches && matches.length > 0 && h("div",{className:"mt-8"},
             h("p",{className:"mono-label flex items-center gap-1.5 text-gold"},h(Icon,{name:"star",size:11}),"Recomendados para você"),
             h("p",{className:"mt-1 text-xs text-slate-500"},"Fornecedores compatíveis com o estado, segmento e regime tributário da sua empresa."),
-            h("div",{className:"mt-3 grid gap-5 md:grid-cols-2"},matches.map((m)=>h(CompanyCard,{key:m.id,row:m,session,onView:()=>setSelected(m),onAdd:()=>addPortfolio(m)})))),
+            h("div",{className:"stagger mt-3 grid gap-5 md:grid-cols-2"},matches.map((m)=>h(CompanyCard,{key:m.id,row:m,session,onView:()=>setSelected(m),onAdd:()=>addPortfolio(m)})))),
           h("div",{className:"mt-4 flex flex-wrap items-center gap-2"},
             h("button",{type:"button",onClick:()=>setFScore(!fScore),className:chipCls(fScore)},"Score ≥ 800"),
             ufs.map((uf)=>h("button",{key:uf,type:"button",onClick:()=>setFUf(fUf===uf?"":uf),className:chipCls(fUf===uf)},uf)),
@@ -965,7 +1027,7 @@
           h("p",{className:"mono-label mt-4 text-slate-500"},`${visible.length} empresa${visible.length!==1?"s":""} encontrada${visible.length!==1?"s":""}`),
           usingExamples && h(Notice,{tone:"gold",className:"mt-4 text-xs"},"Exibindo empresas de exemplo. Busque um CNPJ real para gerar a primeira análise."),
           loading && !results.length && h("div",{className:"mt-8 grid gap-5 md:grid-cols-2"},[1,2,3,4].map(i=>h(SkeletonCard,{key:i}))),
-          h("div",{className:"mt-6 grid gap-5 md:grid-cols-2"},visible.map((row,i)=>h(CompanyCard,{key:row.id||row.cnpj||i,row,session,onView:()=>view(row),onAdd:()=>addPortfolio(row)}))),
+          h("div",{className:"stagger mt-6 grid gap-5 md:grid-cols-2"},visible.map((row,i)=>h(CompanyCard,{key:row.id||row.cnpj||i,row,session,onView:()=>view(row),onAdd:()=>addPortfolio(row)}))),
           !loading && !visible.length && h("p",{className:"mt-8 text-sm text-slate-500"},results.length?"Nenhuma empresa com esses filtros — clique em \"Limpar filtros\" para ver todas.":"Nenhum resultado. Tente buscar pelo CNPJ completo."),
           !session && h(Notice,{tone:"gold",className:"mt-8"},"Crie uma conta gratuita para ver o score completo, a explicação de cada dimensão e monitorar fornecedores."),
           h(ScoreDisclaimer)),
@@ -1247,11 +1309,13 @@
           h("h1",{className:"font-serif text-3xl font-black"},"Visão Geral"),
           profile?.role==="supplier" && company && !company.listed && h(Notice,{tone:"gold",className:"mt-4"},
             h("span",null,"Sua empresa ainda não está no diretório público. ",h(Link,{to:"/documentos",className:"font-bold text-gold hover:underline"},"Envie os documentos obrigatórios")," para a análise da equipe Crivo.")),
-          h("div",{className:"mt-5 grid gap-5 md:grid-cols-4"},
-            h(Card,null,h("p",{className:"text-sm text-slate-500"},"Plano"),h("p",{className:"mt-2 text-2xl font-black capitalize"},plan),plan==="free"&&h(Link,{to:"/planos",className:"text-sm font-bold text-brand"},"Fazer upgrade →")),
-            ...[["Fornecedores monitorados",items.length],["Alto risco (score < 600)",high],["Alertas ativos",alerts.length]].map(([a,b])=>h(Card,{key:a},h("p",{className:"text-sm text-slate-500"},a),h("p",{className:"mt-2 text-2xl font-black"},h(CountUp,{value:b,duration:600}))))),
+          h("div",{className:"mt-5 grid grid-cols-2 gap-4 md:grid-cols-4"},
+            h(StatCard,{label:"Plano",value:h("span",{className:"capitalize"},plan),icon:"gem",tone:"gold",foot:plan==="free"?h(Link,{to:"/planos",className:"font-bold text-brand hover:underline"},"Fazer upgrade →"):"Assinatura ativa"}),
+            h(StatCard,{label:"Fornecedores monitorados",value:h(CountUp,{value:items.length,duration:600}),icon:"users",tone:"muted",foot:items.length?"na sua carteira":"carteira vazia"}),
+            h(StatCard,{label:"Alto risco (score < 600)",value:h(CountUp,{value:high,duration:600}),icon:"shield",tone:high>0?"danger":"success",accent:high>0?"text-danger":"text-success",foot:high>0?"requer atenção":"tudo sob controle"}),
+            h(StatCard,{label:"Alertas ativos",value:h(CountUp,{value:alerts.length,duration:600}),icon:"bell",tone:alerts.length>0?"gold":"muted",foot:alerts.length>0?"role para ver":"nenhum no momento"})),
           h(Card,{className:"mt-6"},
-            h("h2",{className:"font-bold"},"Adicionar fornecedor"),
+            h("h2",{className:"flex items-center gap-2 font-bold"},h("span",{className:"flex h-6 w-6 items-center justify-center rounded-md text-gold",style:{background:"var(--gold-bg2)"}},h(Icon,{name:"plus",size:14})),"Adicionar fornecedor"),
             h("p",{className:"mt-1 text-sm text-slate-500"},"Digite o CNPJ — buscamos os dados na Receita Federal e calculamos o score automaticamente."),
             h("form",{onSubmit:add,className:"mt-4 flex flex-col gap-3 md:flex-row"},
               h(Input,{value:cnpj,onChange:e=>setCnpj(formatCnpj(e.target.value)),placeholder:"00.000.000/0000-00",inputMode:"numeric","aria-label":"CNPJ do fornecedor"}),
@@ -1280,7 +1344,7 @@
                 h("thead",null,h("tr",{className:"border-b"},["Empresa","CNPJ","Segmento","Score","Situação","Ações"].map(x=>h("th",{key:x,className:"py-2 pr-3"},x)))),
                 h("tbody",null,items.map(i=>{
                   const rr=risk(i.score);
-                  return h("tr",{key:i.portfolio.id,className:"border-b"},
+                  return h("tr",{key:i.portfolio.id,className:"data-row border-b"},
                     h("td",{className:"py-3 pr-3 font-semibold"},i.razao_social),
                     h("td",{className:"pr-3"},formatCnpj(i.cnpj)),
                     h("td",{className:"pr-3"},i.segmento||"—"),
@@ -1297,7 +1361,7 @@
             alerts.length
               ? alerts.map(a=>{
                   const sev=SEVERITY[a.severity]||SEVERITY.low;
-                  return h("div",{key:a.id,className:"mt-3 flex items-start justify-between gap-3 rounded-lg bg-slate-50 p-3 text-sm"},
+                  return h("div",{key:a.id,className:"data-row mt-3 flex items-start justify-between gap-3 rounded-lg bg-slate-50 p-3 text-sm"},
                     h("div",{className:"flex items-start gap-2"},
                       h("span",{className:`mt-1.5 h-2 w-2 shrink-0 rounded-full ${sev.dot}`}),
                       h("div",null,
@@ -1401,7 +1465,7 @@
               ? docs.map(d=>{
                   const st=docStatus(d);
                   const ab=APPROVAL_BADGE[d.status]||APPROVAL_BADGE.pending;
-                  return h("div",{key:d.id,className:"mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm"},
+                  return h("div",{key:d.id,className:"data-row mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm"},
                     h("div",null,
                       h("p",{className:"font-semibold"},docLabel(d.tipo)),
                       h("p",{className:"text-xs text-slate-500"},d.filename)),
@@ -1811,7 +1875,7 @@
                       h("div", { className:"mt-2 flex flex-wrap gap-x-2" }, rowActions(c))))),
                   h("table", { className:"mt-6 hidden w-full text-left text-sm md:table" },
                   h("thead", null, h("tr", { className:"border-b" }, ["Empresa","CNPJ","Docs obrigatórios","Situação RFB","Diretório","Ações"].map((x)=>h("th",{key:x,className:"py-2 pr-3"},x)))),
-                  h("tbody", null, filtered.map((c) => h("tr", { key:c.id, className:"border-b" },
+                  h("tbody", null, filtered.map((c) => h("tr", { key:c.id, className:"data-row border-b" },
                     h("td", { className:"py-3 pr-3 font-semibold" }, c.razao_social),
                     h("td", { className:"pr-3 whitespace-nowrap" }, formatCnpj(c.cnpj)),
                     h("td", { className:"pr-3" }, h("span", { className:validCount(c.id) >= REQUIRED_DOC_COUNT ? "font-bold text-success" : "" }, `${validCount(c.id)}/${REQUIRED_DOC_COUNT}`)),
