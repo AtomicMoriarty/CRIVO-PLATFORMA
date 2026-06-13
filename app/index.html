@@ -134,19 +134,16 @@
       .data-row{transition:background-color .18s ease}
       .data-row:hover{background:var(--card2)}
       .avatar-chip{display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:10px;background:var(--gold-bg2);color:var(--gold2);border:1px solid var(--gold-bd);font-family:'Playfair Display',serif;font-weight:700}
-      /* Fundo do hero: gradiente escuro animado no tema do Crivo (substitui as ondas).
-         Anima a POSIÇÃO de um gradiente grande — suave, roda na GPU, sem framer-motion.
-         Glows dourado/azul ficam fixos; só a base azul-petróleo flui devagar. */
-      .gradient-bg{
-        background:
-          radial-gradient(820px 400px at 82% -12%, rgba(200,150,58,.18), transparent 60%),
-          radial-gradient(640px 340px at 6% 112%, rgba(46,134,193,.14), transparent 60%),
-          linear-gradient(125deg, #0A1420 0%, #0F2A3F 28%, #14283C 50%, #103A3A 72%, #0A1420 100%);
-        background-size: 100% 100%, 100% 100%, 280% 280%;
-        background-position: 0 0, 0 0, 0% 50%;
-        animation: gradientShift 22s ease infinite;
+      /* Gradiente da PÁGINA TODA: camada fixa atrás de todo o conteúdo, só em tons de
+         azul → navy (sem dourado/teal), fluindo devagar. Uma camada só = leve.
+         prefers-reduced-motion (no fim) deixa estático. */
+      body::before{
+        content:"";position:fixed;inset:0;z-index:-1;
+        background:linear-gradient(160deg,#16293D 0%,#0F2233 32%,#0A1420 58%,#13283C 100%);
+        background-size:200% 200%;
+        animation:pageGrad 24s ease infinite;
       }
-      @keyframes gradientShift{0%,100%{background-position:0 0,0 0,0% 50%}50%{background-position:0 0,0 0,100% 50%}}
+      @keyframes pageGrad{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
       /* Botão flutuante de WhatsApp */
       .wa-fab{transition:transform .2s ease,box-shadow .2s ease}
       .wa-fab:hover{transform:scale(1.08)}
@@ -763,7 +760,7 @@
         return h(React.Fragment, null, ...childList(children));
       }
       function Footer() {
-        return h("footer", { className:"border-t bg-navy text-white" },
+        return h("footer", { className:"border-t border-white/10 text-white" },
           h("div", { className:"mx-auto grid max-w-7xl gap-6 px-4 py-10 md:grid-cols-4" },
             h("div", null, h("h3", { className:"font-serif text-2xl font-black" }, "Crivo."), h("p", { className:"mt-2 text-sm text-slate-300" }, "Inteligência fiscal aplicada à cadeia de fornecedores.")),
             h("div", null, h("p", { className:"font-semibold" }, "Produto"), h(Link, { to:"/diretorio", className:"mt-2 block text-sm text-slate-300" }, "Diretório"), h(Link, { to:"/planos", className:"mt-2 block text-sm text-slate-300" }, "Planos"), h(Link, { to:"/cadastrar?perfil=fornecedor", className:"mt-2 block text-sm text-slate-300" }, "Sou fornecedor")),
@@ -774,11 +771,6 @@
       }
 
       // ---------- Páginas públicas ----------
-      // Fundo do hero: gradiente escuro animado (tema Crivo). Substitui as ondas;
-      // sem framer-motion — a animação vive no CSS (.gradient-bg), suave e na GPU.
-      function GradientBg() {
-        return h("div", { className:"gradient-bg pointer-events-none absolute inset-0 z-0", "aria-hidden":true });
-      }
       // Faixa de credibilidade honesta (no lugar de "logos de clientes" inventados):
       // as fontes oficiais que o Crivo realmente cruza.
       function SourcesStrip() {
@@ -790,7 +782,7 @@
           ["SEFAZ", "Certidões estaduais"],
           ["Comitê Gestor", "CBS/IBS · Reforma"],
         ];
-        return h("section", { className:"border-y border-white/5 bg-navy" },
+        return h("section", { className:"border-y border-white/5" },
           h("div", { className:"mx-auto max-w-7xl px-4 py-12" },
             h(Reveal, null,
               h("p", { className:"mono-label text-center text-gold" }, "Inteligência a partir de fontes oficiais"),
@@ -826,8 +818,7 @@
       }
       function Home() {
         return h(PublicLayout, null,
-          h("section", { className:"bg-navy text-white relative overflow-hidden" },
-            h(GradientBg),
+          h("section", { className:"text-white relative" },
             h("div", { className:"relative z-10 mx-auto max-w-4xl px-4 pb-12 pt-20 text-center" },
               h("div", { className:"eyebrow mb-7" }, "Avaliação Tributária CBS/IBS · LC 214/2025"),
               h("h1", { className:"font-serif text-5xl font-black leading-[1.05] tracking-tight md:text-7xl" },
