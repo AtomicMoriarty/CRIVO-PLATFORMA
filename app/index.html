@@ -209,6 +209,10 @@
         return { ...risk(total), label: n >= 800 ? "Forte" : n >= 600 ? "Moderada" : "Frágil" };
       }
       const FIN_DIMS = [["dim_rentabilidade", "Rentabilidade"], ["dim_liquidez", "Liquidez"], ["dim_endividamento", "Endividamento"]];
+      // Crédito CBS/IBS aproveitável por regime (ilustrativo — alíquota de referência LC 214/2025).
+      const REGULAR_RATE = 0.28;
+      const CREDIT_RATE = { lucro_real: 0.28, lucro_presumido: 0.28, simples: 0.03, mei: 0 };
+      const creditRate = (regime) => CREDIT_RATE[regime] ?? REGULAR_RATE;
       function translateError(message) {
         const m = String(message || "");
         if (/Invalid login credentials/i.test(m)) return "E-mail ou senha incorretos.";
@@ -640,6 +644,31 @@
         }));
       }
 
+      // Mini-gráfico nativo (SVG) da evolução do Score ao longo do tempo (PRD 5.4).
+      function ScoreTrend({ companyId }) {
+        const [pts, setPts] = useState(null);
+        useEffect(() => {
+          if (!companyId) { setPts([]); return; }
+          supabase.from("scores").select("total,calculated_at").eq("company_id", companyId).order("calculated_at", { ascending:true }).limit(24)
+            .then(({ data }) => setPts(data || []));
+        }, [companyId]);
+        if (pts === null) return h("div", { className:"skel mt-3 h-14 w-full" });
+        if (pts.length < 2) return h("p", { className:"mt-3 text-xs text-slate-500" }, "Evolução do score: aguardando mais leituras — o monitoramento diário acumula o histórico.");
+        const W = 320, H = 56, pad = 5;
+        const vals = pts.map((p) => Number(p.total) || 0);
+        const max = Math.max(...vals), min = Math.min(...vals);
+        const x = (i) => pad + i * (W - 2*pad) / (pts.length - 1);
+        const y = (v) => pad + (1 - ((v - min) / ((max - min) || 1))) * (H - 2*pad);
+        const d = vals.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
+        const delta = vals[vals.length-1] - vals[0];
+        const color = delta >= 0 ? "#3DB882" : "#E05252";
+        return h("div", { className:"mt-3 rounded-lg border border-slate-200 p-3" },
+          h("div", { className:"flex items-center justify-between" },
+            h("p", { className:"mono-label text-slate-500" }, "Evolução do score"),
+            h("p", { className:"text-xs font-bold", style:{ color } }, `${delta>=0?"+":""}${delta} pts · ${pts.length} leituras`)),
+          h("svg", { width:"100%", viewBox:`0 0 ${W} ${H}`, preserveAspectRatio:"none", className:"mt-2", "aria-hidden":true },
+            h("path", { d, fill:"none", stroke:color, strokeWidth:2, strokeLinecap:"round", strokeLinejoin:"round" })));
+      }
       // ---------- Modal KYP ----------
       function KypModal({ company, onClose, onAdd }) {
         const { session, profile } = useAuth();
@@ -699,6 +728,11 @@
               h("p", { className:"mt-2 text-xs text-slate-500" }, `Calculado em ${new Date(score.calculated_at).toLocaleString("pt-BR")}${(()=>{ const n = score.explanation ? DIM_META.filter(([,k])=>{ const s = score.explanation?.[k]?.source; return s && s !== "placeholder"; }).length : null; return n ? ` · ${n} de ${DIM_META.length} dimensões ativas` : ""; })()}`),
               h("div", { className:"mt-4" }, h(RiskBanner, { total })),
               h(ScoreBreakdown, { score }),
+              info?.id && !info?.preview && h(ScoreTrend, { companyId: info.id }),
+              info?.regime && h("div", { className:"mt-4 rounded-lg border border-slate-200 p-3 text-sm" },
+                h("p", { className:"mono-label text-gold" }, "Potencial de crédito CBS/IBS"),
+                h("p", { className:"mt-1 text-slate-300" }, `Numa compra de R$ 100 mil deste fornecedor (${REGIME_LABEL[info.regime] || info.regime}), o crédito estimado é ~${money.format(Math.round(100000 * creditRate(info.regime)))}`, creditRate(info.regime) < REGULAR_RATE ? ` — ${money.format(Math.round(100000 * (REGULAR_RATE - creditRate(info.regime))))} a menos que um fornecedor regular.` : "."),
+                h("p", { className:"mt-1 text-[10px] text-slate-500" }, "Valores ilustrativos (alíquota de referência LC 214/2025). Indicador de potencial, não garantia de crédito.")),
               socios.length > 0 && h("div", { className:"mt-4 rounded-lg border border-slate-200 p-3" },
                 h("p", { className:"text-sm font-bold" }, "Quadro societário"),
                 ...socios.slice(0, 6).map((s, i) => h("p", { key:i, className:"mt-1 text-xs text-slate-500" }, `${s?.nome || "Sócio"}${s?.qual ? ` — ${s.qual}` : ""}`))),
@@ -931,19 +965,31 @@
                     h("p",{className:"mono-label mt-4 text-slate-500"},"Porto & Pacca Advogados · Adeke Adequação Corporativa · Retorno em até 2 dias úteis")));
       }
       function CreditCompare() {
+        const [valor, setValor] = useState(100000);
+        const [regime, setRegime] = useState("simples");
+        const regular = valor * REGULAR_RATE;
+        const outro = valor * creditRate(regime);
+        const diff = Math.max(0, regular - outro);
+        const fmt0 = (n) => money.format(Math.round(n));
         return h("section", { className:"bg-white" }, h("div", { className:"mx-auto max-w-7xl px-4 py-16" },
           h(Reveal, null,
             h("h2", { className:"font-serif text-4xl font-black text-navy" }, "O custo invisível do fornecedor errado"),
-            h("p", { className:"mt-3 max-w-2xl text-slate-600" }, "Com a reforma tributária (LC 214/2025), o regime do fornecedor define quanto crédito CBS/IBS sua empresa aproveita. Na mesma compra de R$ 100 mil:")),
-          h("div", { className:"mt-8 grid gap-5 md:grid-cols-2" },
-            h(Reveal, null, h(Card, { className:"border-success/40" },
-              h("p", { className:"text-xs font-bold uppercase tracking-widest text-success" }, "Fornecedor no regime regular (Lucro Real)"),
-              h("p", { className:"mt-3 font-serif text-5xl font-black text-success" }, "~R$ 28 mil"),
-              h("p", { className:"mt-2 text-sm text-slate-600" }, "de potencial de crédito CBS/IBS para abater dos seus impostos."))),
-            h(Reveal, { delay:120 }, h(Card, { className:"border-danger/40" },
-              h("p", { className:"text-xs font-bold uppercase tracking-widest text-danger" }, "Fornecedor no Simples (sem regime híbrido)"),
-              h("p", { className:"mt-3 font-serif text-5xl font-black text-danger" }, "~R$ 3 mil"),
-              h("p", { className:"mt-2 text-sm text-slate-600" }, "o fornecedor mais \"barato\" na nota pode sair R$ 25 mil mais caro na carga tributária efetiva.")))),
+            h("p", { className:"mt-3 max-w-2xl text-slate-600" }, "Com a reforma tributária (LC 214/2025), o regime do fornecedor define quanto crédito CBS/IBS sua empresa aproveita. Simule abaixo:")),
+          h("div", { className:"mt-8 grid items-end gap-4 md:grid-cols-2" },
+            h(Field, { label:"Valor da compra (R$)" }, h(Input, { type:"number", min:0, step:1000, value:valor, onChange:(e)=>setValor(Math.max(0, Number(e.target.value)||0)) })),
+            h(Field, { label:"Regime do fornecedor a comparar" }, h(Select, { value:regime, onChange:(e)=>setRegime(e.target.value) }, [["simples","Simples Nacional"],["mei","MEI"],["lucro_presumido","Lucro Presumido"],["lucro_real","Lucro Real"]].map(([v,l])=>h("option",{key:v,value:v},l))))),
+          h("div", { className:"mt-6 grid gap-5 md:grid-cols-2" },
+            h(Card, { className:"border-success/40" },
+              h("p", { className:"text-xs font-bold uppercase tracking-widest text-success" }, "Fornecedor no regime regular"),
+              h("p", { className:"mt-3 font-serif text-5xl font-black text-success" }, "~", fmt0(regular)),
+              h("p", { className:"mt-2 text-sm text-slate-600" }, "de potencial de crédito CBS/IBS para abater dos seus impostos.")),
+            h(Card, { className:"border-danger/40" },
+              h("p", { className:"text-xs font-bold uppercase tracking-widest text-danger" }, "Fornecedor no ", REGIME_LABEL[regime] || regime),
+              h("p", { className:"mt-3 font-serif text-5xl font-black text-danger" }, "~", fmt0(outro)),
+              h("p", { className:"mt-2 text-sm text-slate-600" }, diff>0 ? `Você aproveita ${fmt0(diff)} a menos de crédito na mesma compra.` : "Mesmo potencial de crédito que o regime regular."))),
+          h("div", { className:"gold-panel mt-5 rounded-xl border p-4 text-center" },
+            h("p", { className:"mono-label text-gold" }, "Custo invisível nessa compra"),
+            h("p", { className:"mt-1 font-serif text-3xl font-black", style:{ color:"var(--gold2)" } }, fmt0(diff))),
           h("p", { className:"mt-4 text-xs text-slate-500" }, "Valores ilustrativos com base nas alíquotas de referência estimadas da LC 214/2025. O aproveitamento real depende da operação — o Crivo indica o potencial, não garante o crédito.")));
       }
       // Pesos reais das dimensões (espelham calculate-score). Se o cálculo mudar
@@ -2349,6 +2395,8 @@
         const [q, setQ] = useState("");
         const [fStatus, setFStatus] = useState("");
         const [fDocs, setFDocs] = useState(false);
+        const [audit, setAudit] = useState([]);
+        const [actors, setActors] = useState({});
         const isAdmin = profile?.role === "admin";
         async function load() {
           const { data } = await supabase.from("companies").select("*").order("listed", { ascending: true }).order("created_at", { ascending: false }).limit(200);
@@ -2357,6 +2405,13 @@
           const map = {};
           (ds || []).forEach((d) => { (map[d.company_id] = map[d.company_id] || []).push(d); });
           setDocsByCompany(map);
+          const { data: al } = await supabase.from("audit_log").select("*").order("created_at", { ascending: false }).limit(40);
+          setAudit(al || []);
+          const ids = [...new Set((al || []).map((a) => a.actor_id).filter(Boolean))];
+          if (ids.length) {
+            const { data: ps } = await supabase.from("profiles").select("id, full_name, email").in("id", ids);
+            const m = {}; (ps || []).forEach((p) => { m[p.id] = p.full_name || p.email; }); setActors(m);
+          }
           setLoading(false);
         }
         useEffect(() => { if (isAdmin) load(); }, [isAdmin]);
@@ -2435,6 +2490,20 @@
                     h("td", { className:"pr-3" }, h("span", { className:c.situacao_rfb === "ativa" ? "text-success" : "text-danger" }, c.situacao_rfb || "—")),
                     h("td", { className:"pr-3" }, listedBadge(c)),
                     h("td", { className:"whitespace-nowrap" }, rowActions(c)))))))),
+          h(Card, { className:"mt-6" },
+            h("h2", { className:"font-bold" }, "Histórico de ações (trilha de auditoria)"),
+            h("p", { className:"mt-1 text-xs text-slate-500" }, "Registro automático no servidor — aprovações, publicações, saúde financeira e vínculos. Não pode ser apagado pelo front (trilha defensiva)."),
+            audit.length === 0
+              ? h("p", { className:"mt-3 text-sm text-slate-500" }, "Nenhuma ação registrada ainda.")
+              : h("div", { className:"mt-3 space-y-2" }, audit.map((a) => {
+                  const labels = { document_valid:"Documento aprovado", document_rejected:"Documento rejeitado", document_pending:"Documento reenviado", document_expired:"Documento vencido", company_published:"Empresa publicada no diretório", company_unpublished:"Empresa despublicada", financial_score_set:"Saúde financeira registrada", member_linked:"Vínculo de conta criado" };
+                  const comp = rows.find((c) => c.id === a.company_id);
+                  return h("div", { key:a.id, className:"data-row flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/5 p-2 text-sm" },
+                    h("div", { className:"min-w-0" },
+                      h("p", { className:"font-semibold" }, (labels[a.action] || a.action) + (a.detail && a.detail.role ? ` (${a.detail.role})` : "")),
+                      h("p", { className:"text-xs text-slate-500" }, [comp && comp.razao_social, actors[a.actor_id] && `por ${actors[a.actor_id]}`].filter(Boolean).join(" · ") || "—")),
+                    h("span", { className:"shrink-0 text-xs text-slate-400" }, timeAgo(a.created_at)));
+                }))),
           review && h(AdminReview, { company:review, docs:docsByCompany[review.id] || [], onClose:()=>setReview(null), onChanged:load, onSetListed:setListed }));
       }
 
