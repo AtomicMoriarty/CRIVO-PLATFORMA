@@ -193,6 +193,22 @@
         if (n >= 600) return { label: "Médio risco", color: "bg-warning", fill: "fill-a", text: "text-warning", soft: "bg-amber-50" };
         return { label: "Alto risco", color: "bg-danger", fill: "fill-r", text: "text-danger", soft: "bg-red-50" };
       }
+      // Saúde Financeira (Painel Receita): score a partir dos percentis (0–100) vs. setor.
+      // Endividamento tem polaridade negativa (menos dívida = melhor) → invertido.
+      function calcFinancial(p) {
+        const clamp = (v) => Math.max(0, Math.min(100, Number(v) || 0));
+        const r = clamp(p.rentabilidade), l = clamp(p.liquidez), e = clamp(p.endividamento);
+        const dim_rentabilidade = Math.round(r * 10);
+        const dim_liquidez = Math.round(l * 10);
+        const dim_endividamento = Math.round((100 - e) * 10);
+        const total = Math.round(dim_rentabilidade * 0.35 + dim_liquidez * 0.35 + dim_endividamento * 0.30);
+        return { total, dim_rentabilidade, dim_liquidez, dim_endividamento, percentis: { rentabilidade: r, liquidez: l, endividamento: e } };
+      }
+      function finRisk(total) {
+        const n = Number(total || 0);
+        return { ...risk(total), label: n >= 800 ? "Forte" : n >= 600 ? "Moderada" : "Frágil" };
+      }
+      const FIN_DIMS = [["dim_rentabilidade", "Rentabilidade"], ["dim_liquidez", "Liquidez"], ["dim_endividamento", "Endividamento"]];
       function translateError(message) {
         const m = String(message || "");
         if (/Invalid login credentials/i.test(m)) return "E-mail ou senha incorretos.";
@@ -625,20 +641,26 @@
 
       // ---------- Modal KYP ----------
       function KypModal({ company, onClose, onAdd }) {
-        const { session } = useAuth();
+        const { session, profile } = useAuth();
         const [score, setScore] = useState(null);
+        const [finScore, setFinScore] = useState(null);
         const [info, setInfo] = useState(company);
         const [loading, setLoading] = useState(true);
         const [error, setError] = useState(null);
         useEffect(() => {
           if (!company) return;
-          setScore(null); setInfo(company); setError(null); setLoading(true);
+          setScore(null); setFinScore(null); setInfo(company); setError(null); setLoading(true);
           const body = company.id && !company.preview ? { company_id: company.id } : { cnpj: cleanCnpj(company.cnpj), modo: "preview" };
           invokeScore(body).then(({ data, error: err }) => {
             if (err || !data || data.error) setError(translateError(data?.error || err?.message || "Não foi possível calcular o score agora."));
             else { setScore(data); if (data.company) setInfo((prev) => ({ ...prev, ...data.company })); }
             setLoading(false);
           });
+          // Saúde Financeira (RLS decide: só membros/pago/admin recebem linhas).
+          if (company.id && !company.preview) {
+            supabase.from("financial_scores").select("*").eq("company_id", company.id).order("created_at", { ascending: false }).limit(1).maybeSingle()
+              .then(({ data }) => setFinScore(data || null));
+          }
         }, [company?.cnpj]);
         const dialogRef = useModalA11y(onClose);
         if (!company) return null;
@@ -668,7 +690,7 @@
             score && h("div", { className:"mt-6" },
               h("div", { className:"flex items-end justify-between" },
                 h("div", null,
-                  h("p", { className:"mono-label text-slate-400" }, `Score Crivo ${score.version || "v2"}`),
+                  h("p", { className:"mono-label text-slate-400" }, "Score de Conformidade"),
                   h("p", { className:`font-serif text-6xl font-black ${rr.text}` }, h(CountUp, { value: total }))),
                 h("span", { className:`rounded-full px-3 py-1 text-xs font-bold ${rr.soft} ${rr.text}` }, rr.label)),
               h("div", { className:"scorebar mt-3 h-2 rounded-full bg-slate-100" },
@@ -680,6 +702,32 @@
                 h("p", { className:"text-sm font-bold" }, "Quadro societário"),
                 ...socios.slice(0, 6).map((s, i) => h("p", { key:i, className:"mt-1 text-xs text-slate-500" }, `${s?.nome || "Sócio"}${s?.qual ? ` — ${s.qual}` : ""}`))),
               h(ScoreDisclaimer)),
+            (() => {
+              const paid = profile?.plan === "pro" || profile?.plan === "premium";
+              if (finScore) {
+                const fr = finRisk(finScore.total);
+                return h("div", { className:"mt-4 rounded-lg border border-slate-200 p-4" },
+                  h("div", { className:"flex items-end justify-between gap-3" },
+                    h("div", null,
+                      h("p", { className:"mono-label text-gold" }, "Score de Saúde Financeira"),
+                      h("p", { className:`font-serif text-4xl font-black ${fr.text}` }, h(CountUp, { value: finScore.total }))),
+                    h("span", { className:`rounded-full px-3 py-1 text-xs font-bold ${fr.soft} ${fr.text}` }, fr.label)),
+                  h("div", { className:"mt-3 space-y-2" }, FIN_DIMS.map(([col, name]) => {
+                    const v = Number(finScore[col]); const dr = finRisk(v);
+                    return h("div", { key:col, className:"flex items-center gap-3" },
+                      h("span", { className:"w-28 shrink-0 text-xs font-semibold" }, name),
+                      h("div", { className:"scorebar h-1.5 flex-1 rounded-full bg-slate-100" }, h("span", { className:`block h-1.5 rounded-full ${dr.fill}`, style:{ width:`${Math.min(v/10,100)}%` } })),
+                      h("span", { className:`w-16 shrink-0 text-right text-xs font-bold ${dr.text}` }, dr.label));
+                  })),
+                  h("p", { className:"mt-3 text-[10px] uppercase tracking-wider text-slate-400" }, `Fonte: ${finScore.fonte}`),
+                  finScore.nota && h("p", { className:"mt-1 text-xs text-slate-500" }, finScore.nota));
+              }
+              if (paid) return h("p", { className:"mt-4 text-xs text-slate-500" }, "Saúde Financeira: ainda não informada por este fornecedor.");
+              return h("div", { className:"mt-4 rounded-lg border border-gold/30 bg-yellow-50 p-4 text-sm" },
+                h("p", { className:"flex items-center gap-2 font-bold text-gold" }, h(Icon, { name:"gem", size:14 }), "Score de Saúde Financeira"),
+                h("p", { className:"mt-1 text-slate-300" }, "Veja a solidez financeira deste fornecedor (rentabilidade, liquidez, endividamento), com base no Painel Receita. Disponível nos planos Pro e Premium."),
+                h(Link, { to: session ? "/conta?tab=plano" : "/cadastrar", className:"mt-2 inline-flex font-bold text-gold hover:underline" }, session ? "Fazer upgrade →" : "Criar conta →"));
+            })(),
             h("div", { className:"mt-6 flex flex-wrap justify-end gap-2" },
               info?.listed && h(Link, { to:`/empresa/${cleanCnpj(info.cnpj)}`, className:"inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-bold hover:bg-white/10" }, h(Icon, { name:"share", size:13 }), "Página pública"),
               session && onAdd && h(Button, { onClick:() => onAdd(info) }, "Adicionar à carteira"),
@@ -1887,7 +1935,7 @@
             ? h(Card, { className:"mt-8" },
                 h("div", { className:"flex items-end justify-between" },
                   h("div", null,
-                    h("p", { className:"mono-label text-slate-400" }, `Score Crivo ${score.version || "v2"}`),
+                    h("p", { className:"mono-label text-slate-400" }, "Score de Conformidade"),
                     h("p", { className:`font-serif text-6xl font-black ${rr.text}` }, h(CountUp, { value: score.total }))),
                   h("span", { className:`rounded-full px-3 py-1 text-xs font-bold ${rr.soft} ${rr.text}` }, rr.label)),
                 h("div", { className:"scorebar mt-3 h-2 rounded-full bg-slate-100" },
@@ -1918,6 +1966,9 @@
       function AdminReview({ company, docs, onClose, onChanged, onSetListed }) {
         const [users, setUsers] = useState(null);
         const [score, setScore] = useState(null);
+        const [finScore, setFinScore] = useState(null);
+        const [fin, setFin] = useState({ rentabilidade:"", liquidez:"", endividamento:"", nota:"" });
+        const [savingFin, setSavingFin] = useState(false);
         useEffect(() => {
           (async () => {
             const { data: links } = await supabase.from("company_users").select("user_id, role").eq("company_id", company.id);
@@ -1930,8 +1981,24 @@
             setUsers((links || []).map((l) => ({ ...l, profile: profiles.find((p) => p.id === l.user_id) })));
             const { data: sc } = await supabase.from("scores").select("total, calculated_at").eq("company_id", company.id).order("calculated_at", { ascending: false }).limit(1).maybeSingle();
             setScore(sc);
+            const { data: fsc } = await supabase.from("financial_scores").select("*").eq("company_id", company.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+            setFinScore(fsc || null);
           })();
         }, [company.id]);
+        async function saveFin() {
+          const r = Number(fin.rentabilidade), l = Number(fin.liquidez), e = Number(fin.endividamento);
+          if ([r, l, e].some((v) => !isFinite(v) || v < 0 || v > 100)) return toast("Informe percentis de 0 a 100 nas três dimensões.", "error");
+          setSavingFin(true);
+          const calc = calcFinancial({ rentabilidade:r, liquidez:l, endividamento:e });
+          const { data: au } = await supabase.auth.getUser();
+          const { error } = await supabase.from("financial_scores").insert({ company_id: company.id, ...calc, nota: fin.nota || null, created_by: au?.user?.id || null });
+          setSavingFin(false);
+          if (error) return toast(adminError(error), "error");
+          toast("Score de Saúde Financeira registrado.");
+          setFin({ rentabilidade:"", liquidez:"", endividamento:"", nota:"" });
+          const { data: fsc } = await supabase.from("financial_scores").select("*").eq("company_id", company.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+          setFinScore(fsc || null);
+        }
         const dialogRef = useModalA11y(onClose);
         async function setDocStatus(d, status) {
           const { error } = await supabase.from("documents").update({ status }).eq("id", d.id);
@@ -2008,6 +2075,16 @@
                     h("span", { className:`rounded-full px-2 py-1 text-xs font-bold ${badge[1]}` }, badge[0]),
                     h("button", { onClick:()=>download(doc), className:"text-xs font-bold text-brand hover:underline" }, "Baixar")));
               })),
+            h("div", { className:"mt-4 rounded-lg border border-slate-200 p-3" },
+              h("p", { className:"text-sm font-bold" }, "Saúde Financeira (Painel Receita)"),
+              h("p", { className:"mt-1 text-xs text-slate-500" }, "Após revisar o PDF do Painel Receita enviado, informe o percentil (0–100) de cada dimensão vs. o setor. Os valores em R$ não são armazenados — só o score derivado."),
+              finScore && h("p", { className:"mt-2 text-xs text-gold" }, `Score atual: ${finScore.total}/1000 · registrado em ${new Date(finScore.created_at).toLocaleDateString("pt-BR")}`),
+              h("div", { className:"mt-3 grid gap-3 sm:grid-cols-3" },
+                [["rentabilidade","Rentabilidade (P)"],["liquidez","Liquidez (P)"],["endividamento","Endividamento (P)"]].map(([k,label]) =>
+                  h(Field, { key:k, label }, h(Input, { type:"number", min:0, max:100, value:fin[k], onChange:(ev)=>setFin((f)=>({ ...f, [k]:ev.target.value })), placeholder:"0–100" })))),
+              h("p", { className:"mt-2 text-[10px] text-slate-500" }, "Endividamento: informe o percentil do Painel. Quanto MENOR a dívida, melhor — o cálculo inverte automaticamente."),
+              h("textarea", { className:"mt-3 w-full rounded-lg border p-2 text-sm", rows:2, placeholder:"Nota (opcional) — ex.: ano-base 2025", value:fin.nota, onChange:(ev)=>setFin((f)=>({ ...f, nota:ev.target.value })) }),
+              h(Button, { onClick:saveFin, disabled:savingFin, className:"mt-3" }, savingFin ? "Salvando..." : "Registrar saúde financeira")),
             h("div", { className:"mt-6 flex flex-wrap justify-end gap-2" },
               company.listed
                 ? h(Button, { variant:"danger", onClick:()=>onSetListed(company, false) }, "Despublicar do diretório")
