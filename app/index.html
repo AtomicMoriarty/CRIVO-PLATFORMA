@@ -134,9 +134,15 @@
       .data-row{transition:background-color .18s ease}
       .data-row:hover{background:var(--card2)}
       .avatar-chip{display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:10px;background:var(--gold-bg2);color:var(--gold2);border:1px solid var(--gold-bd);font-family:'Playfair Display',serif;font-weight:700}
-      /* Linhas douradas fluindo atrás do hero (recriação nativa do "background paths") */
-      @keyframes flowLine{to{stroke-dashoffset:-2400}}
-      .flow-line{fill:none;stroke:var(--gold2);stroke-linecap:round;animation-name:flowLine;animation-timing-function:linear;animation-iteration-count:infinite}
+      /* Ondas douradas suaves atrás do hero — movidas por transform (roda na GPU,
+         sem travar) e cobrindo toda a largura. Bem transparentes pra não atrapalhar. */
+      @keyframes waveX{from{transform:translateX(0)}to{transform:translateX(-360px)}}
+      .wave-line{fill:none;stroke:var(--gold2);stroke-linecap:round;animation-name:waveX;animation-timing-function:linear;animation-iteration-count:infinite;will-change:transform}
+      /* Botão flutuante de WhatsApp */
+      .wa-fab{transition:transform .2s ease,box-shadow .2s ease}
+      .wa-fab:hover{transform:scale(1.08)}
+      .wa-fab::after{content:'';position:absolute;inset:0;border-radius:9999px;animation:waPulse 2.4s ease-out infinite;z-index:-1}
+      @keyframes waPulse{0%{box-shadow:0 0 0 0 rgba(37,211,102,.45)}70%{box-shadow:0 0 0 14px rgba(37,211,102,0)}100%{box-shadow:0 0 0 0 rgba(37,211,102,0)}}
       @media (prefers-reduced-motion: reduce){*,*::before,*::after{animation-duration:.001s!important;transition-duration:.001s!important}}
     </style>
   </head>
@@ -563,6 +569,7 @@
         gem: ["M6 3h12l4 6-10 13L2 9z", "M11 3 8 9l4 13 4-13-3-6", "M2 9h20"],
         plus: ["M12 5v14", "M5 12h14"],
         userOne: ["M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2", "M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8"],
+        download: ["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "M7 10l5 5 5-5", "M12 15V3"],
       };
       function Icon({ name, size = 16, className = "" }) {
         const paths = ICONS[name];
@@ -674,6 +681,15 @@
       }
 
       // ---------- Layouts ----------
+      function WhatsAppFab() {
+        const num = "5532999035792"; // +55 (32) 99903-5792
+        const msg = encodeURIComponent("Olá! Vim pelo site do Crivo e gostaria de saber mais.");
+        return h("a", { href:`https://wa.me/${num}?text=${msg}`, target:"_blank", rel:"noopener noreferrer", "aria-label":"Falar no WhatsApp",
+          className:"wa-fab fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full text-white shadow-lg",
+          style:{ background:"#25D366" } },
+          h("svg", { width:28, height:28, viewBox:"0 0 24 24", fill:"currentColor", "aria-hidden":true },
+            h("path", { d:"M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.71.306 1.263.489 1.694.625.712.227 1.36.195 1.872.118.571-.085 1.758-.719 2.006-1.413.247-.694.247-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.885-9.885 9.885M20.52 3.449C18.24 1.245 15.24 0 12.045 0 5.463 0 .104 5.36.101 11.944c0 2.105.549 4.16 1.595 5.97L0 24l6.305-1.654a11.95 11.95 0 005.71 1.456h.005c6.582 0 11.945-5.36 11.948-11.945a11.9 11.9 0 00-3.45-8.418z" })));
+      }
       function PublicLayout({ children }) {
         const { session, signOut } = useAuth();
         const [menu, setMenu] = useState(false);
@@ -697,7 +713,7 @@
               session && h("button", { onClick:()=>{ setMenu(false); signOut(); }, className:"block w-full rounded-lg px-3 py-2.5 text-left text-sm text-slate-500" }, "Sair"),
               h(Link, { to:cta[0], onClick:()=>setMenu(false), className:"mt-2 block rounded-lg bg-gold px-3 py-2.5 text-center font-bold text-navy" }, cta[1]))),
           ...childList(children),
-          h(Footer));
+          h(Footer), h(WhatsAppFab));
       }
       function PrivateLayout({ children }) {
         const { user, profile, company, signOut } = useAuth();
@@ -752,19 +768,25 @@
       // Linhas douradas animadas atrás do hero — recriação nativa (SVG + CSS, sem
       // framer-motion) do efeito "FloatingPaths", no tema do Crivo.
       function FloatingPaths() {
-        const make = (position) => Array.from({ length: 16 }, (_, i) => ({
-          id: position + "-" + i,
-          d: `M-${380 - i*5*position} -${189 + i*6}C-${380 - i*5*position} -${189 + i*6} -${312 - i*5*position} ${216 - i*6} ${152 - i*5*position} ${343 - i*6}C${616 - i*5*position} ${470 - i*6} ${684 - i*5*position} ${875 - i*6} ${684 - i*5*position} ${875 - i*6}`,
-          w: 0.6 + i*0.045,
-          op: 0.05 + i*0.007,
-          dur: (18 + i*0.8) + "s",
-          delay: (-i*0.6) + "s",
-        }));
-        const paths = [...make(1), ...make(-1)];
+        const W = 1440, H = 600, wl = 360; // wl = comprimento de onda (loop translada -wl)
+        const wave = (y, amp) => {
+          let d = `M-720 ${y}`;
+          for (let x = -720; x < W + 720; x += wl) d += ` q ${wl/4} ${-amp}, ${wl/2} 0 t ${wl/2} 0`;
+          return d;
+        };
+        // Ondas distribuídas por toda a altura; velocidades diferentes = parallax suave.
+        const rows = [
+          { y: 70,  amp: 24, dur: 26, op: 0.10, w: 1.2 },
+          { y: 165, amp: 34, dur: 34, op: 0.07, w: 1.0 },
+          { y: 250, amp: 20, dur: 22, op: 0.11, w: 1.3 },
+          { y: 340, amp: 40, dur: 40, op: 0.06, w: 1.0 },
+          { y: 430, amp: 26, dur: 30, op: 0.09, w: 1.2 },
+          { y: 525, amp: 34, dur: 36, op: 0.05, w: 1.0 },
+        ];
         return h("div", { className:"pointer-events-none absolute inset-0 z-0", "aria-hidden":true },
-          h("svg", { className:"h-full w-full", viewBox:"0 0 696 316", fill:"none", preserveAspectRatio:"xMidYMid slice" },
-            paths.map((p) => h("path", { key:p.id, d:p.d, className:"flow-line",
-              style:{ strokeWidth:p.w, strokeOpacity:p.op, strokeDasharray:"560 1600", animationDuration:p.dur, animationDelay:p.delay } }))));
+          h("svg", { className:"h-full w-full", viewBox:`0 0 ${W} ${H}`, fill:"none", preserveAspectRatio:"none" },
+            rows.map((r, i) => h("path", { key:i, d:wave(r.y, r.amp), className:"wave-line",
+              style:{ stroke:"var(--gold2)", strokeWidth:r.w, strokeOpacity:r.op, animationDuration:r.dur + "s", animationDelay:(-i*4) + "s" } }))));
       }
       // Faixa de credibilidade honesta (no lugar de "logos de clientes" inventados):
       // as fontes oficiais que o Crivo realmente cruza.
@@ -1502,6 +1524,25 @@
           await supabase.rpc("mark_alert_read",{p_alert_id:alert.id,p_user_id:uid}).catch(logFail("mark_alert_read"));
           setAlerts(a=>a.filter(x=>x.id!==alert.id));
         }
+        function exportCsv(){
+          if(plan==="free"){ toast("Exportar relatórios está disponível nos planos Pro e Premium.","error"); return window.__route.nav("/conta?tab=plano"); }
+          if(!items.length) return toast("Sua carteira está vazia.","error");
+          // Separador ";" + BOM para abrir certinho no Excel em português.
+          const headers=["Empresa","CNPJ","Segmento","Estado","Score","Risco","Situação RFB"];
+          const esc=(v)=>`"${String(v??"").replace(/"/g,'""')}"`;
+          const lines=items.map(i=>{
+            const s=i.score!=null?Math.round(i.score):"";
+            const r=i.score!=null?risk(i.score).label:"em análise";
+            return [i.razao_social,formatCnpj(i.cnpj),i.segmento||"",i.estado||"",s,r,i.situacao_rfb||"ativa"].map(esc).join(";");
+          });
+          const csv="﻿"+[headers.map(esc).join(";"),...lines].join("\r\n");
+          const url=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8;"}));
+          const a=document.createElement("a");
+          a.href=url; a.download=`carteira-crivo-${new Date().toISOString().slice(0,10)}.csv`;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(()=>URL.revokeObjectURL(url),1000);
+          toast("Carteira exportada em CSV.");
+        }
         const high = items.filter(i=>i.score!==null&&Number(i.score)<600).length;
         const plan = profile?.plan || "free";
         return h(PrivateLayout,null,
@@ -1520,7 +1561,9 @@
               h(Input,{value:cnpj,onChange:e=>setCnpj(formatCnpj(e.target.value)),placeholder:"00.000.000/0000-00",inputMode:"numeric","aria-label":"CNPJ do fornecedor"}),
               h(Button,{type:"submit",disabled:loading,className:"md:w-44"},loading?"Consultando...":"Adicionar"))),
           h(Card,{className:"mt-6 overflow-x-auto"},
-            h("h2",{className:"font-bold"},"Carteira de fornecedores"),
+            h("div",{className:"flex flex-wrap items-center justify-between gap-3"},
+              h("h2",{className:"font-bold"},"Carteira de fornecedores"),
+              items.length>0 && h("button",{onClick:exportCsv,className:"inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-bold hover:border-gold/40 hover:text-gold"},h(Icon,{name:"download",size:14}),"Exportar CSV")),
             items.length === 0 && loaded
               ? h("p",{className:"mt-4 text-sm text-slate-500"},"Sua carteira está vazia. Adicione o primeiro fornecedor acima para começar a monitorar a conformidade fiscal.")
               : h(React.Fragment,null,
