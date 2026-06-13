@@ -259,6 +259,7 @@
         regime_regular: { label: "Comprovante de Regime Regular CBS/IBS", required: false, hasExpiry: false, fonte: "Comitê Gestor (a partir de 2027)" },
         certidao_municipal: { label: "Certidão Municipal (ISS)", required: false, hasExpiry: true, dias: 90, fonte: "portal da prefeitura" },
         alteracao_contratual: { label: "Última Alteração Contratual", required: false, hasExpiry: false, fonte: "Junta Comercial" },
+        painel_receita: { label: "Relatório do Painel Receita (RFB)", required: false, hasExpiry: false, fonte: "e-CAC · Portaria RFB 678/2026 — opcional; comprova saúde financeira (compartilhado com seu consentimento)" },
         outros: { label: "Outros documentos", required: false, hasExpiry: false },
       };
       const REQUIRED_DOC_COUNT = Object.values(DOC_META).filter((m) => m.required).length;
@@ -809,6 +810,7 @@
           ["Meus dados e documentos estão seguros?", "Sim. Tudo trafega criptografado, com controle de acesso por linha no banco (RLS) e tratamento conforme a LGPD. Você pode pedir acesso, correção ou exclusão pelo dpo@adeke.com.br."],
           ["Preciso pagar para começar?", "Não. O plano Grátis permite monitorar até 3 fornecedores e consultar o diretório público. Você evolui para Pro ou Premium quando precisar de mais."],
           ["O que muda com a Reforma Tributária (LC 214/2025)?", "O regime e a regularidade do fornecedor passam a definir quanto crédito de CBS/IBS você aproveita. Escolher fornecedores regulares pode representar uma diferença relevante na sua carga tributária efetiva."],
+          ["O que é o Painel Receita e como ele entra no Crivo?", "O Painel Receita (Portaria RFB nº 678/2026) é o BI oficial da Receita Federal que mostra a cada empresa seus próprios indicadores econômicos (lucratividade, liquidez, endividamento) comparados ao setor, em percentis. No Crivo, o fornecedor pode — por consentimento — compartilhar esse relatório para comprovar saúde financeira, um diferencial de confiança no diretório. O Crivo nunca acessa dados sigilosos de terceiros: a informação vem sempre da própria empresa, e exibimos apenas um selo (ex.: 'Saúde financeira: Forte'), sem expor números privados."],
         ];
         return h("section", { className:"mx-auto max-w-3xl px-4 py-16" },
           h(Reveal, null,
@@ -1726,6 +1728,7 @@
             h("p",{className:"mt-4 text-slate-600"},"Gerencie clientes, fornecedores em risco, alertas críticos e comissões recorrentes de 20% sobre cada cliente indicado."),
             h("div",{className:"mt-8 grid gap-4 md:grid-cols-2"},[
               ["Visão multiempresa","Todos os clientes e seus fornecedores em um único painel."],
+              ["Saúde financeira (Painel Receita)","Ajude seus clientes a comprovar solidez compartilhando, com consentimento, o Painel Receita (Portaria RFB 678) — um selo de confiança no diretório."],
               ["Alertas priorizados","Mudanças críticas de situação fiscal em destaque."],
               ["Comissões recorrentes","20% do plano de cada cliente indicado, todo mês."],
               ["White-label","Apresente o Crivo com a marca do seu escritório (Premium)."],
