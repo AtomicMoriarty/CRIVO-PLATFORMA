@@ -644,6 +644,44 @@
         }));
       }
 
+      // Dossiê de due diligence (PRD 5.5/5.6): abre uma janela de impressão com os
+      // dados + os 2 scores + documentos → o navegador salva como PDF. Sem lib.
+      async function exportDossier(info, score, finScore) {
+        let docs = [];
+        if (info?.id && !info?.preview) {
+          const { data } = await supabase.from("documents").select("tipo,status,valid_until").eq("company_id", info.id);
+          docs = data || [];
+        }
+        const esc = (s) => String(s ?? "").replace(/[<>&]/g, (c) => ({ "<":"&lt;", ">":"&gt;", "&":"&amp;" }[c]));
+        const rr = risk(score?.total), fr = finRisk(finScore?.total);
+        const dimRows = DIM_META.map(([col, , name]) => { const v = Number(score?.[col]); return `<tr><td>${esc(name)}</td><td class="r">${isFinite(v)&&v>0?Math.round(v)+"/1000":"—"}</td></tr>`; }).join("");
+        const finRows = finScore ? FIN_DIMS.map(([col,name]) => { const v = Number(finScore[col]); const d = finRisk(v); return `<tr><td>${esc(name)}</td><td class="r">${d.label} (${Math.round(v)}/1000)</td></tr>`; }).join("") : "";
+        const docRows = docs.length ? docs.map((d) => { const label = (DOC_META[d.tipo]?.label)||d.tipo; const st = d.status==="valid"?"Aprovado":d.status==="rejected"?"Rejeitado":d.status==="expired"?"Vencido":"Em análise"; const val = d.valid_until?new Date(d.valid_until).toLocaleDateString("pt-BR"):"—"; return `<tr><td>${esc(label)}</td><td>${st}</td><td>${val}</td></tr>`; }).join("") : "";
+        const socios = Array.isArray(info?.socios) ? info.socios : [];
+        const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Dossiê Crivo — ${esc(info?.razao_social||"")}</title><style>
+*{box-sizing:border-box}body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0A1420;margin:0;padding:32px;max-width:820px}
+h1{font-size:22px;margin:0 0 2px}.sub{color:#475569;font-size:13px;margin:0 0 14px}
+.brand{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #C8963A;padding-bottom:8px;margin-bottom:18px}.brand b{font-size:20px}.brand span{color:#6B7A8D;font-size:11px}
+.score{display:flex;gap:16px;margin:12px 0}.score .box{flex:1;border:1px solid #e2e8f0;border-radius:8px;padding:12px}.score .n{font-size:28px;font-weight:800}.score .l{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D}
+h2{font-size:13px;margin:18px 0 6px;border-bottom:1px solid #e2e8f0;padding-bottom:4px}
+table{width:100%;border-collapse:collapse;font-size:12px}td{padding:5px 6px;border-bottom:1px solid #f1f5f9}td.r{text-align:right}
+.chip{display:inline-block;font-size:11px;background:#f1f5f9;border-radius:99px;padding:2px 8px;margin:0 4px 4px 0}
+.foot{margin-top:22px;font-size:10px;color:#64748b;border-top:1px solid #e2e8f0;padding-top:10px}
+@media print{body{padding:8px}}</style></head><body>
+<div class="brand"><b>Crivo <span style="color:#C8963A">·</span></b><span>Dossiê de Conformidade Fiscal · ${new Date().toLocaleString("pt-BR")}</span></div>
+<h1>${esc(info?.razao_social||"Empresa")}</h1><p class="sub">${esc(formatCnpj(info?.cnpj))}</p>
+<div><span class="chip">${esc(REGIME_LABEL[info?.regime]||info?.regime||"Regime n/d")}</span><span class="chip">${esc(info?.segmento||"Segmento n/d")}</span><span class="chip">${esc([info?.municipio,info?.estado].filter(Boolean).join("/")||"—")}</span><span class="chip">RFB: ${esc(info?.situacao_rfb||"—")}</span></div>
+<div class="score"><div class="box"><div class="l">Score de Conformidade</div><div class="n">${score?.total!=null?Math.round(score.total):"—"} <span style="font-size:12px;color:#64748b">/1000 · ${score?.total!=null?esc(rr.label):"—"}</span></div></div><div class="box"><div class="l">Saúde Financeira</div><div class="n">${finScore?.total!=null?Math.round(finScore.total):"—"} <span style="font-size:12px;color:#64748b">${finScore?.total!=null?"/1000 · "+esc(fr.label):"(não informado)"}</span></div></div></div>
+<h2>Score de Conformidade — dimensões</h2><table>${dimRows}</table>
+${finScore?`<h2>Saúde Financeira — dimensões (Painel Receita, informado pelo fornecedor)</h2><table>${finRows}</table>`:""}
+${socios.length?`<h2>Quadro societário</h2><table>${socios.slice(0,8).map((s)=>`<tr><td>${esc(s?.nome||"Sócio")}</td><td class="r">${esc(s?.qual||"")}</td></tr>`).join("")}</table>`:""}
+${docRows?`<h2>Documentos</h2><table><tr><td><b>Documento</b></td><td><b>Status</b></td><td><b>Validade</b></td></tr>${docRows}</table>`:""}
+<div class="foot">O Score Crivo é um indicador estatístico de aderência tributária. Não constitui parecer jurídico, não garante aproveitamento de crédito CBS/IBS e não substitui análise por contador ou advogado tributarista. Dados de fontes públicas e de documentos fornecidos pelo prestador. Gerado pelo Crivo.</div>
+<script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script></body></html>`;
+        const w = window.open("", "_blank");
+        if (!w) { toast("Permita pop-ups para exportar o dossiê.", "error"); return; }
+        w.document.open(); w.document.write(html); w.document.close();
+      }
       // Mini-gráfico nativo (SVG) da evolução do Score ao longo do tempo (PRD 5.4).
       function ScoreTrend({ companyId }) {
         const [pts, setPts] = useState(null);
@@ -767,6 +805,7 @@
               info?.listed && h(Link, { to:`/empresa/${cleanCnpj(info.cnpj)}`, className:"inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-bold hover:bg-white/10" }, h(Icon, { name:"share", size:13 }), "Página pública"),
               session && onAdd && h(Button, { onClick:() => onAdd(info) }, "Adicionar à carteira"),
               !session && h(Link, { to:"/cadastrar", className:"rounded-lg bg-gold px-4 py-2 text-sm font-bold text-navy" }, "Criar conta para monitorar"),
+              score && h(Button, { variant:"ghost", onClick:()=>exportDossier(info, score, finScore) }, "Exportar dossiê"),
               h(Button, { variant:"ghost", onClick:onClose }, "Fechar"))));
       }
 
@@ -2353,15 +2392,33 @@
         const [adding, setAdding] = useState(false);
         const [selected, setSelected] = useState(null);
         const [finFor, setFinFor] = useState(null);
+        const [tasks, setTasks] = useState([]);
+        const [nt, setNt] = useState({ company_id:"", title:"" });
         const isAccountant = profile?.role === "accountant" || profile?.role === "admin";
         async function load() {
           const { data: links } = await supabase.from("company_users").select("company_id, role").eq("user_id", user.id);
           const ids = (links || []).filter((l)=>["accountant","owner"].includes(l.role)).map((l)=>l.company_id);
-          if (!ids.length) { setClients([]); setLoaded(true); return; }
+          if (!ids.length) { setClients([]); setTasks([]); setLoaded(true); return; }
           const { data: comps } = await supabase.from("companies").select("*, scores(total,calculated_at), financial_scores(total,created_at)").in("id", ids);
           const latest = (arr, key) => Array.isArray(arr) && arr.length ? [...arr].sort((a,b)=>Date.parse(b[key])-Date.parse(a[key]))[0] : null;
           setClients((comps||[]).map((c)=>({ ...c, conformidade: latest(c.scores,"calculated_at")?.total ?? null, financeira: latest(c.financial_scores,"created_at")?.total ?? null })));
+          const { data: tk } = await supabase.from("tasks").select("*").in("company_id", ids).order("created_at", { ascending:false });
+          setTasks(tk || []);
           setLoaded(true);
+        }
+        async function addTask(e) {
+          e.preventDefault();
+          if (!nt.company_id) return toast("Escolha o cliente.", "error");
+          if (!nt.title.trim()) return toast("Descreva a tarefa.", "error");
+          const { error } = await supabase.from("tasks").insert({ company_id:nt.company_id, title:nt.title.trim(), created_by:user.id });
+          if (error) return toast(translateError(error.message), "error");
+          setNt({ company_id:"", title:"" }); load();
+        }
+        async function toggleTask(t) {
+          const done = t.status === "done";
+          const { error } = await supabase.from("tasks").update({ status: done?"open":"done", done_at: done?null:new Date().toISOString() }).eq("id", t.id);
+          if (error) return toast(translateError(error.message), "error");
+          load();
         }
         useEffect(()=>{ if (isAccountant && user) load(); }, [isAccountant, user?.id]);
         async function addClient(e) {
@@ -2425,6 +2482,25 @@
                           h("button", { onClick:()=>setFinFor(c), className:"text-xs font-bold text-gold hover:underline" }, "Saúde financeira")));
                     }))),
             h(ScoreDisclaimer)),
+          h(Card, { className:"mt-6" },
+            h("h2", { className:"font-bold" }, "Tarefas"),
+            h("p", { className:"mt-1 text-sm text-slate-500" }, "Solicitar documento, acionar fornecedor, registrar atendimento — por cliente."),
+            clients.length > 0 && h("form", { onSubmit:addTask, className:"mt-4 grid gap-2 sm:grid-cols-2 md:grid-cols-3" },
+              h(Select, { value:nt.company_id, onChange:(e)=>setNt((x)=>({ ...x, company_id:e.target.value })) }, h("option", { value:"" }, "Cliente..."), clients.map((c)=>h("option", { key:c.id, value:c.id }, c.razao_social))),
+              h(Input, { value:nt.title, onChange:(e)=>setNt((x)=>({ ...x, title:e.target.value })), placeholder:"Ex.: solicitar CND atualizada" }),
+              h(Button, { type:"submit" }, "Adicionar")),
+            (() => {
+              const sorted = [...tasks].sort((a,b) => (a.status==="done") - (b.status==="done") || Date.parse(b.created_at) - Date.parse(a.created_at));
+              if (!sorted.length) return h("p", { className:"mt-4 text-sm text-slate-500" }, clients.length ? "Nenhuma tarefa ainda." : "Adicione clientes para criar tarefas.");
+              return h("div", { className:"mt-4 space-y-2" }, sorted.map((t) => {
+                const c = clients.find((x)=>x.id===t.company_id); const done = t.status==="done";
+                return h("div", { key:t.id, className:"data-row flex items-center justify-between gap-2 rounded-lg border p-2 text-sm" },
+                  h("label", { className:"flex min-w-0 cursor-pointer items-center gap-2" },
+                    h("input", { type:"checkbox", checked:done, onChange:()=>toggleTask(t), className:"shrink-0" }),
+                    h("span", { className:"min-w-0 truncate" }, h("span", { className: done?"text-slate-400 line-through":"font-semibold" }, t.title), c && h("span", { className:"ml-2 text-xs text-slate-500" }, c.razao_social))),
+                  h("span", { className:"shrink-0 text-xs text-slate-400" }, timeAgo(t.created_at)));
+              }));
+            })()),
           selected && h(KypModal, { company:selected, onClose:()=>setSelected(null) }),
           finFor && h(FinancialModal, { company:finFor, onClose:()=>setFinFor(null), onSaved:()=>{ setFinFor(null); load(); } }));
       }
