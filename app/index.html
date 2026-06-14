@@ -151,6 +151,8 @@
       @keyframes waPulse{0%{box-shadow:0 0 0 0 rgba(37,211,102,.45)}70%{box-shadow:0 0 0 14px rgba(37,211,102,0)}100%{box-shadow:0 0 0 0 rgba(37,211,102,0)}}
       @media (prefers-reduced-motion: reduce){*,*::before,*::after{animation-duration:.001s!important;transition-duration:.001s!important}}
     </style>
+    <!-- Cloudflare Turnstile (anti-robô dos formulários públicos) — render explícito controlado pelo React -->
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
   </head>
   <body>
     <div id="root"></div>
@@ -168,6 +170,8 @@
       const AuthContext = createContext(null);
       const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
       const PENDING_KEY = "crivo_pending_setup";
+      // Cloudflare Turnstile — chave pública (pode ficar no código). A secret fica só no servidor (Supabase).
+      const TURNSTILE_SITE_KEY = "0x4AAAAAADkn8PEOTJDJzL3w";
 
       // ---------- Helpers ----------
       function cleanCnpj(v) { return String(v || "").replace(/\D/g, ""); }
@@ -961,22 +965,64 @@ ${docRows?`<h2>Documentos</h2><table><tr><td><b>Documento</b></td><td><b>Status<
                   h("p", { className:"mt-1.5 text-[11px] leading-snug text-slate-400" }, t))))),
           h(SourcesStrip), h(HowItWorks), h(CreditCompare), h(Methodology), h(PlansSection), h(Faq), h(AccountantLead));
       }
+      // Widget Turnstile: o React controla o ciclo de vida (render explícito + limpeza).
+      // Emite um token "não sou robô" que o servidor (submit-lead) confere antes de gravar o lead.
+      function Turnstile({ onToken, resetKey }) {
+        const box = React.useRef(null);
+        const wid = React.useRef(null);
+        const [slow, setSlow] = useState(false);
+        useEffect(() => {
+          let alive = true;
+          const t0 = Date.now();
+          (function mount() {
+            if (!alive) return;
+            if (!window.turnstile || !box.current) {
+              if (Date.now() - t0 > 8000) setSlow(true);
+              return void setTimeout(mount, 150);
+            }
+            if (wid.current !== null) return;
+            try {
+              wid.current = window.turnstile.render(box.current, {
+                sitekey: TURNSTILE_SITE_KEY,
+                callback: (tok) => { if (alive) onToken(tok); },
+                "error-callback": () => { if (alive) onToken(""); },
+                "expired-callback": () => { if (alive) onToken(""); },
+              });
+            } catch (e) { /* já montado ou indisponível */ }
+          })();
+          return () => {
+            alive = false;
+            try { if (wid.current !== null && window.turnstile) window.turnstile.remove(wid.current); } catch (e) {}
+            wid.current = null;
+          };
+        }, []);
+        useEffect(() => {
+          if (resetKey === undefined || wid.current === null || !window.turnstile) return;
+          try { window.turnstile.reset(wid.current); onToken(""); } catch (e) {}
+        }, [resetKey]);
+        return h("div", null,
+          h("div", { ref: box, style: { minHeight: 65 } }),
+          slow && h("p", { className: "mt-1 text-xs text-slate-500" }, "Verificação de segurança demorando? Recarregue a página se o campo acima não aparecer."));
+      }
       function DiagnosticoLead() {
         const [f,setF]=useState({nome:"",email:"",empresa:""});
         const [loading,setLoading]=useState(false);
         const [sent,setSent]=useState(false);
         const [err,setErr]=useState(null);
+        const [token,setToken]=useState("");
+        const [tsReset,setTsReset]=useState(0);
         const u=(k,v)=>{ setErr(null); setF(x=>({...x,[k]:v})); };
         async function submit(e){
           e.preventDefault();
           if(!f.nome.trim()) return setErr("Preencha seu nome.");
           if(!/^\S+@\S+\.\S+$/.test(f.email)) return setErr("Digite um e-mail válido.");
           if(!f.empresa.trim()) return setErr("Informe o nome da empresa.");
+          if(!token) return setErr("Confirme que você não é um robô (verificação abaixo).");
           setLoading(true);
-          const { error } = await supabase.from("leads").insert({ tipo:"diagnostico", source:"diagnostico", nome:f.nome, email:f.email, empresa:f.empresa, origem:"landing_diagnostico", status:"novo" });
-          supabase.functions.invoke("send-email",{ body:{ tipo:"diagnostico", email:f.email, nome:f.nome, subject:"Diagnóstico solicitado — Crivo", body:"Recebemos sua solicitação de diagnóstico da Reforma Tributária. Nossa equipe entrará em contato em até 2 dias úteis." } }).catch(logFail("e-mail de diagnóstico"));
+          const { data, error } = await supabase.functions.invoke("submit-lead", { body:{ token, lead:{ tipo:"diagnostico", source:"diagnostico", nome:f.nome, email:f.email, empresa:f.empresa, origem:"landing_diagnostico" } } });
           setLoading(false);
-          if(error) return toast(translateError(error.message),"error");
+          if(error || !data?.ok){ setToken(""); setTsReset(n=>n+1); return setErr((data&&data.error) || "Não foi possível enviar agora. Tente novamente."); }
+          supabase.functions.invoke("send-email",{ body:{ tipo:"diagnostico", email:f.email, nome:f.nome, subject:"Diagnóstico solicitado — Crivo", body:"Recebemos sua solicitação de diagnóstico da Reforma Tributária. Nossa equipe entrará em contato em até 2 dias úteis." } }).catch(logFail("e-mail de diagnóstico"));
           setSent(true);
         }
         return h("div",{className:"gold-panel rounded-xl border p-7"},
@@ -995,6 +1041,7 @@ ${docRows?`<h2>Documentos</h2><table><tr><td><b>Documento</b></td><td><b>Status<
                       h(Input,{type:"email",value:f.email,onChange:e=>u("email",e.target.value),placeholder:"E-mail *","aria-label":"E-mail"}),
                       h(Input,{value:f.empresa,onChange:e=>u("empresa",e.target.value),placeholder:"Empresa *","aria-label":"Empresa"}),
                       h(Button,{type:"submit",disabled:loading},loading?"Enviando...":"Quero meu diagnóstico →")),
+                    h("div",{className:"mt-3"},h(Turnstile,{onToken:setToken,resetKey:tsReset})),
                     err && h("p",{className:"mt-2 text-xs font-semibold text-danger",role:"alert"},err),
                     h("p",{className:"mono-label mt-4 text-slate-500"},"Porto & Pacca Advogados · Adeke Adequação Corporativa · Retorno em até 2 dias úteis")));
       }
@@ -1425,14 +1472,17 @@ ${docRows?`<h2>Documentos</h2><table><tr><td><b>Documento</b></td><td><b>Status<
         const u=(k,v)=>setF(x=>({...x,[k]:v}));
         const labels={nome:"Nome",email:"E-mail",empresa:"Empresa",cnpj:"CNPJ",telefone:"Telefone"};
         const [emailErr,setEmailErr]=useState(null);
+        const [token,setToken]=useState("");
+        const [tsReset,setTsReset]=useState(0);
         async function submit(e){
           e.preventDefault();
           if(!/^\S+@\S+\.\S+$/.test(f.email)) return setEmailErr("Digite um e-mail válido.");
+          if(!token) return toast("Confirme que você não é um robô (verificação no formulário).","error");
           setLoading(true);
-          const { error }=await supabase.from("leads").insert({ tipo:"proposta", source:"proposta", nome:f.nome,email:f.email,empresa:f.empresa,cnpj:cleanCnpj(f.cnpj),telefone:f.telefone,plano_interesse:f.plano,mensagem:f.mensagem,status:"novo" });
-          supabase.functions.invoke("send-email",{body:{tipo:"proposta-recebida",email:f.email,nome:f.nome,subject:"Recebemos sua proposta — Crivo",body:"Recebemos sua mensagem. Nossa equipe comercial entrará em contato em até 2 dias úteis."}}).catch(logFail("e-mail de proposta recebida"));
+          const { data, error }=await supabase.functions.invoke("submit-lead",{ body:{ token, lead:{ tipo:"proposta", source:"proposta", nome:f.nome,email:f.email,empresa:f.empresa,cnpj:cleanCnpj(f.cnpj),telefone:f.telefone,plano_interesse:f.plano,mensagem:f.mensagem } } });
           setLoading(false);
-          if(error) return toast(translateError(error.message),"error");
+          if(error || !data?.ok){ setToken(""); setTsReset(n=>n+1); return toast((data&&data.error) || "Não foi possível enviar agora. Tente novamente.","error"); }
+          supabase.functions.invoke("send-email",{body:{tipo:"proposta-recebida",email:f.email,nome:f.nome,subject:"Recebemos sua proposta — Crivo",body:"Recebemos sua mensagem. Nossa equipe comercial entrará em contato em até 2 dias úteis."}}).catch(logFail("e-mail de proposta recebida"));
           setSent(true);
         }
         return h("section",{className:"mx-auto max-w-3xl px-4 py-12"},
@@ -1443,6 +1493,7 @@ ${docRows?`<h2>Documentos</h2><table><tr><td><b>Documento</b></td><td><b>Status<
                 ["nome","email","empresa","cnpj","telefone"].map(k=>h(Field,{key:k,label:labels[k],error:k==="email"?emailErr:null},h(Input,{type:k==="email"?"email":"text",value:f[k],onChange:e=>{if(k==="email")setEmailErr(null);u(k,k==="cnpj"?formatCnpj(e.target.value):e.target.value);},required:k!=="telefone"}))),
                 h(Field,{label:"Plano"},h(Select,{value:f.plano,onChange:e=>u("plano",e.target.value)},[["pro","Pro"],["premium","Premium"]].map(([v,l])=>h("option",{key:v,value:v},l)))),
                 h("textarea",{className:"md:col-span-2 rounded-lg border p-3",rows:3,placeholder:"Mensagem",value:f.mensagem,onChange:e=>u("mensagem",e.target.value)}),
+                h("div",{className:"md:col-span-2"},h(Turnstile,{onToken:setToken,resetKey:tsReset})),
                 h(Button,{type:"submit",disabled:loading,className:"md:col-span-2"},loading?"Enviando...":"Enviar proposta"))));
       }
 
@@ -2006,15 +2057,18 @@ ${docRows?`<h2>Documentos</h2><table><tr><td><b>Documento</b></td><td><b>Status<
         const [loading,setLoading]=useState(false);
         const [sent,setSent]=useState(false);
         const [emailErr,setEmailErr]=useState(null);
+        const [token,setToken]=useState("");
+        const [tsReset,setTsReset]=useState(0);
         const u=(k,v)=>{ if(k==="email") setEmailErr(null); setF(x=>({...x,[k]:v})); };
         async function submit(e){
           e.preventDefault();
           if(!/^\S+@\S+\.\S+$/.test(f.email)) return setEmailErr("Digite um e-mail válido.");
+          if(!token) return toast("Confirme que você não é um robô (verificação no formulário).","error");
           setLoading(true);
-          const {error}=await supabase.from("leads").insert({tipo:"parceiro_contador",source:"parceiro",nome:f.nome,email:f.email,crc:f.crc,escritorio:f.escritorio,qtd_clientes_pj:Number(f.qtd)||0,telefone:f.telefone,canal_aquisicao:f.canal,status:"novo"});
-          supabase.functions.invoke("send-email",{body:{tipo:"parceiro-contador-recebido",email:f.email,nome:f.nome,subject:"Recebemos sua solicitação de parceria — Crivo",body:"Recebemos sua solicitação de parceria. Entraremos em contato para seu onboarding como parceiro Crivo."}}).catch(logFail("e-mail de parceria"));
+          const {data,error}=await supabase.functions.invoke("submit-lead",{ body:{ token, lead:{tipo:"parceiro_contador",source:"parceiro",nome:f.nome,email:f.email,crc:f.crc,escritorio:f.escritorio,qtd_clientes_pj:Number(f.qtd)||0,telefone:f.telefone,canal_aquisicao:f.canal} } });
           setLoading(false);
-          if(error) return toast(translateError(error.message),"error");
+          if(error || !data?.ok){ setToken(""); setTsReset(n=>n+1); return toast((data&&data.error) || "Não foi possível enviar agora. Tente novamente.","error"); }
+          supabase.functions.invoke("send-email",{body:{tipo:"parceiro-contador-recebido",email:f.email,nome:f.nome,subject:"Recebemos sua solicitação de parceria — Crivo",body:"Recebemos sua solicitação de parceria. Entraremos em contato para seu onboarding como parceiro Crivo."}}).catch(logFail("e-mail de parceria"));
           setSent(true);
         }
         const { session } = useAuth();
@@ -2036,6 +2090,7 @@ ${docRows?`<h2>Documentos</h2><table><tr><td><b>Documento</b></td><td><b>Status<
               h("form",{onSubmit:submit,className:"mt-5 space-y-3"},
                 [["nome","Nome do contador"],["email","E-mail"],["crc","CRC"],["escritorio","Escritório"],["qtd","Quantidade de clientes PJ"],["telefone","Telefone"],["canal","Como conheceu o Crivo"]].map(([k,l])=>
                   h(Field,{key:k,label:l,error:k==="email"?emailErr:null},h(Input,{type:k==="email"?"email":k==="qtd"?"number":"text",value:f[k],onChange:e=>u(k,e.target.value),required:k!=="telefone"&&k!=="canal"}))),
+                h(Turnstile,{onToken:setToken,resetKey:tsReset}),
                 h(Button,{type:"submit",disabled:loading,className:"w-full"},loading?"Enviando...":"Enviar")))));
       }
 
