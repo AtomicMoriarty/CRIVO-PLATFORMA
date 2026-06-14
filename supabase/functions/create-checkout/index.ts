@@ -1,7 +1,7 @@
 import Stripe from "https://esm.sh/stripe@16.12.0?target=deno";
 
 const cors = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": "https://crivo-plataforma.heitorhllopes.workers.dev",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };

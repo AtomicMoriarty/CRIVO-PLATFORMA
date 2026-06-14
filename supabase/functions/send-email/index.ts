@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 
 const cors = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": "https://crivo-plataforma.heitorhllopes.workers.dev",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
