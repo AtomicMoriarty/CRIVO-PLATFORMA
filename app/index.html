@@ -297,12 +297,7 @@
 
       const REGIME_LABEL = { lucro_real: "Lucro Real", lucro_presumido: "Lucro Presumido", simples: "Simples Nacional", mei: "MEI" };
 
-      const mockCompanies = [
-        { id:"m1", razao_social:"Metalúrgica Souza Ltda", cnpj:"12.345.678/0001-90", segmento:"Indústria", regime:"lucro_real", estado:"SP", situacao_rfb:"ativa", score: 884, exemplo:true },
-        { id:"m2", razao_social:"TechServ B2B Soluções", cnpj:"98.765.432/0001-10", segmento:"Tecnologia", regime:"lucro_presumido", estado:"MG", situacao_rfb:"ativa", score: 742, exemplo:true },
-        { id:"m3", razao_social:"LogPrime Transportes", cnpj:"11.222.333/0001-44", segmento:"Logística", regime:"simples", estado:"RJ", situacao_rfb:"ativa", score: 628, exemplo:true },
-        { id:"m4", razao_social:"Alfa Obras e Serviços", cnpj:"44.555.666/0001-77", segmento:"Construção", regime:"lucro_presumido", estado:"SP", situacao_rfb:"suspensa", score: 418, exemplo:true },
-      ];
+      // (Empresas de exemplo removidas — produção mostra empty-state real no diretório.)
 
       // ---------- Cadastro pendente (resiliente à confirmação de e-mail) ----------
       const PENDING_TTL_MS = 7 * 24 * 3600 * 1000;
@@ -1153,7 +1148,7 @@ ${docRows?`<h2>Documentos</h2><table><tr><td><b>Documento</b></td><td><b>Status<
           setLoading(true);
           const { data } = await supabase.from("companies").select("*, scores(total,calculated_at)").eq("listed", true).order("created_at",{ascending:false}).limit(12);
           if (data?.length) { setResults(data.map(normalizeCompany)); setUsingExamples(false); }
-          else { setResults(mockCompanies); setUsingExamples(true); }
+          else { setResults([]); setUsingExamples(true); }
           setLoading(false);
         }
         async function doSearch(raw) {
@@ -1244,7 +1239,7 @@ ${docRows?`<h2>Documentos</h2><table><tr><td><b>Documento</b></td><td><b>Status<
               h("button",{key:v,type:"button",onClick:()=>setFRegime(fRegime===v?"":v),className:chipCls(fRegime===v)},l)),
             (fScore||fUf||fRegime) && h("button",{type:"button",onClick:()=>{setFScore(false);setFUf("");setFRegime("");},className:"mono-label inline-flex items-center gap-1 px-2 py-2.5 text-slate-500 hover:text-danger md:py-1.5"},"Limpar filtros",h(Icon,{name:"x",size:11}))),
           h("p",{className:"mono-label mt-4 text-slate-500"},`${visible.length} empresa${visible.length!==1?"s":""} encontrada${visible.length!==1?"s":""}`),
-          usingExamples && h(Notice,{tone:"gold",className:"mt-4 text-xs"},"Exibindo empresas de exemplo. Busque um CNPJ real para gerar a primeira análise."),
+          usingExamples && h(Notice,{tone:"gold",className:"mt-4 text-xs"},"O diretório está em curadoria pela equipe Crivo. Busque qualquer CNPJ acima para gerar a primeira análise na hora."),
           loading && !results.length && h("div",{className:"mt-8 grid gap-5 md:grid-cols-2"},[1,2,3,4].map(i=>h(SkeletonCard,{key:i}))),
           h("div",{className:"stagger mt-6 grid gap-5 md:grid-cols-2"},visible.map((row,i)=>h(CompanyCard,{key:row.id||row.cnpj||i,row,session,onView:()=>view(row),onAdd:()=>addPortfolio(row)}))),
           !loading && !visible.length && h("p",{className:"mt-8 text-sm text-slate-500"},results.length?"Nenhuma empresa com esses filtros — clique em \"Limpar filtros\" para ver todas.":"Nenhum resultado. Tente buscar pelo CNPJ completo."),

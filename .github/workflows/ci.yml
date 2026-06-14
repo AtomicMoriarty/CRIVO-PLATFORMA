@@ -1,0 +1,42 @@
+name: CI — Crivo
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Validar sintaxe do módulo (app/index.html)
+        run: node tooling/check-syntax.mjs
+
+      - name: Tailwind compila e está commitado
+        run: |
+          npx -y tailwindcss@3.4.14 -c tooling/tailwind.config.js -i tooling/tailwind.css -o /tmp/tw.css --minify
+          if ! diff -q /tmp/tw.css app/assets/tailwind.css >/dev/null; then
+            echo "::warning::app/assets/tailwind.css está desatualizado — rode o rebuild e commite o CSS."
+          fi
+
+      - name: Scan de segredos acidentais
+        run: |
+          if grep -rEn "sk_live|sk_test|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|service_role.{0,20}eyJ" app/ supabase/functions/ tooling/ 2>/dev/null; then
+            echo "❌ Possível segredo commitado no código"; exit 1
+          fi
+          echo "✅ Nenhum segredo óbvio encontrado"
+
+      - name: Scan de dependências de build (npm audit)
+        working-directory: tooling
+        run: |
+          npm install --package-lock-only --no-audit >/dev/null 2>&1 || true
+          npm audit --audit-level=high || echo "::warning::Veja o npm audit acima (dependências de build, não embarcadas)."

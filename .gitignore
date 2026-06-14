@@ -1,25 +1,23 @@
-# Local CLI state
-supabase/.temp/
-.wrangler/
-
-# Environment / secrets
-.env
-.env.*
-
-# Misc
-node_modules/
-.DS_Store
-
-# King Context
-.king-context/core/
-.king-context/docs/
-.king-context/decisions/
-.king-context/research/
-.king-context/data/
-.king-context/_temp/
-.king-context/_learned/
 
 # Claude Code (configuração pessoal/local não vai para o git)
-.claude/settings.local.json
-__pycache__/
+# Environment / secrets
+# King Context
+# Local CLI state
+# Misc
 *.pyc
+.DS_Store
+.claude/settings.local.json
+.env
+.env.*
+.king-context/_learned/
+.king-context/_temp/
+.king-context/core/
+.king-context/data/
+.king-context/decisions/
+.king-context/docs/
+.king-context/research/
+.module-check.mjs
+.wrangler/
+__pycache__/
+node_modules/
+supabase/.temp/

@@ -1,0 +1,13 @@
+{
+  "name": "crivo-tooling",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Ferramentas de build/CI do Crivo. O frontend (app/index.html) é buildless e carrega React/supabase-js da CDN esm.sh; aqui só vive o compilador do Tailwind e a checagem de sintaxe.",
+  "scripts": {
+    "build:css": "tailwindcss -c tailwind.config.js -i tailwind.css -o ../app/assets/tailwind.css --minify",
+    "check": "node check-syntax.mjs"
+  },
+  "devDependencies": {
+    "tailwindcss": "3.4.14"
+  }
+}
