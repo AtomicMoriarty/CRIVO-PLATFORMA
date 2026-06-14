@@ -809,7 +809,7 @@
         const { user, profile, company, signOut } = useAuth();
         const path = window.__route.path;
         const links = [["/dashboard","Visão Geral"],["/documentos","Documentos"],["/diretorio","Diretório"],["/conta","Minha conta"]];
-        if (profile?.role === "accountant") links.splice(1, 0, ["/contador","Meus clientes"]);
+        if (profile?.role === "accountant") links.push(["/contador","Espaço do Contador"]);
         if (profile?.role === "admin") links.push(["/admin","Administração"]);
         const initial = ((company?.razao_social || user?.email || "C").trim()[0] || "C").toUpperCase();
         const plan = profile?.plan || "free";
@@ -1010,9 +1010,11 @@
               h("h3", { className:"mt-2 font-serif text-xl font-bold" }, "Adeke Adequação Corporativa"),
               h("p", { className:"mt-2 text-sm leading-relaxed text-slate-600" }, "Conduz a curadoria do diretório, a análise documental e o monitoramento diário — nenhuma empresa entra no diretório sem revisão da equipe.")))),
           h(Reveal, null, h(Card, { className:"mt-8" },
-            h("h3", { className:"font-serif text-xl font-bold" }, "Como o Score Crivo é calculado"),
-            h("p", { className:"mt-2 text-sm text-slate-600" }, "Sete dimensões ponderadas, de 0 a 1000. Você vê a nota e o porquê de cada uma — incluindo a fonte do dado e o artigo de lei aplicável."),
-            h("div", { className:"mt-5 space-y-3" }, DIM_META.map(([, key, name, fundamento]) => {
+            h("h3", { className:"font-serif text-xl font-bold" }, "Os dois scores do Crivo"),
+            h("p", { className:"mt-2 text-sm text-slate-600" }, "Cada empresa recebe dois indicadores complementares, de 0 a 1000 — com a nota e o porquê de cada dimensão."),
+            h("p", { className:"mono-label mt-6 text-gold" }, "Score de Conformidade"),
+            h("p", { className:"mt-1 text-sm text-slate-600" }, "Sete dimensões de regularidade fiscal, com fundamento legal citado — a partir de dados públicos e dos documentos enviados."),
+            h("div", { className:"mt-4 space-y-3" }, DIM_META.map(([, key, name, fundamento]) => {
               const w = DIM_WEIGHTS[key] || 0;
               return h("div", { key, className:"grid items-center gap-2 md:grid-cols-[220px_1fr_auto]" },
                 h("span", { className:"text-sm font-semibold" }, name),
@@ -1020,6 +1022,14 @@
                   h("span", { className:"block h-1.5 rounded-full bg-gold", style:{ width:`${w}%` } })),
                 h("span", { className:"mono-label text-slate-500" }, `${w}%${fundamento ? ` · ${fundamento}` : ""}`));
             })),
+            h("p", { className:"mono-label mt-8 text-gold" }, "Score de Saúde Financeira"),
+            h("p", { className:"mt-1 text-sm text-slate-600" }, "Solidez econômica comparada ao setor, a partir do Painel Receita (Portaria RFB 678/2026) compartilhado pelo próprio fornecedor — sem expor valores em R$."),
+            h("div", { className:"mt-4 space-y-3" }, [["Rentabilidade",35],["Liquidez",35],["Endividamento",30]].map(([name,w]) =>
+              h("div", { key:name, className:"grid items-center gap-2 md:grid-cols-[220px_1fr_auto]" },
+                h("span", { className:"text-sm font-semibold" }, name),
+                h("div", { className:"h-1.5 rounded-full bg-slate-100" },
+                  h("span", { className:"block h-1.5 rounded-full bg-gold", style:{ width:`${w}%` } })),
+                h("span", { className:"mono-label text-slate-500" }, `${w}% · Painel Receita`)))),
             h(ScoreDisclaimer)))));
       }
       function HowItWorks() {
@@ -1580,11 +1590,43 @@
       function Dashboard() {
         const { profile } = useAuth();
         const role = profile?.role;
-        useEffect(() => { if (role === "accountant") window.__route.nav("/contador"); }, [role]);
-        if (role === "accountant") return h(PrivateLayout, null, h("div", { className:"p-12 text-center text-slate-500" }, "Abrindo Meus clientes..."));
+        if (role === "accountant") return h(AccountantHome);
         if (role === "supplier") return h(SupplierPanel);
         if (role === "admin") return h(AdminHome);
         return h(BuyerPanel);
+      }
+      // ---------- Painel do Contador — Visão Geral (resumo) ----------
+      function AccountantHome() {
+        const { user } = useAuth();
+        const [s, setS] = useState(null);
+        useEffect(() => {
+          if (!user) return;
+          (async () => {
+            const { data: links } = await supabase.from("company_users").select("company_id").eq("user_id", user.id).eq("role", "accountant");
+            const ids = (links || []).map((l) => l.company_id);
+            if (!ids.length) { setS({ clients:0, withFin:0, highRisk:0 }); return; }
+            const { data: comps } = await supabase.from("companies").select("id, scores(total,calculated_at), financial_scores(total,created_at)").in("id", ids);
+            const latest = (arr, k) => Array.isArray(arr) && arr.length ? [...arr].sort((a,b)=>Date.parse(b[k])-Date.parse(a[k]))[0] : null;
+            let withFin = 0, highRisk = 0;
+            (comps || []).forEach((c) => {
+              if (latest(c.financial_scores, "created_at")) withFin++;
+              const conf = latest(c.scores, "calculated_at")?.total;
+              if (conf != null && conf < 600) highRisk++;
+            });
+            setS({ clients: ids.length, withFin, highRisk });
+          })();
+        }, [user?.id]);
+        return h(PrivateLayout, null,
+          h("h1", { className:"font-serif text-3xl font-black" }, "Visão Geral"),
+          h("p", { className:"mt-2 text-sm text-slate-500" }, "Resumo da sua carteira de clientes."),
+          h("div", { className:"mt-5 grid grid-cols-2 gap-4 md:grid-cols-3" },
+            h(StatCard, { label:"Clientes", value: s ? h(CountUp,{value:s.clients}) : "—", icon:"users", tone:"gold", foot:"no seu escritório" }),
+            h(StatCard, { label:"Com saúde financeira", value: s ? h(CountUp,{value:s.withFin}) : "—", icon:"gem", tone:"muted", foot:"Painel Receita registrado" }),
+            h(StatCard, { label:"Conformidade < 600", value: s ? h(CountUp,{value:s.highRisk}) : "—", icon:"shield", tone: s?.highRisk>0?"danger":"success", accent: s?.highRisk>0?"text-danger":"text-success", foot: s?.highRisk>0?"requer atenção":"tudo certo" })),
+          h(Card, { className:"mt-6" },
+            h("h2", { className:"font-bold" }, "Espaço do Contador"),
+            h("p", { className:"mt-1 text-sm text-slate-500" }, "Adicione clientes, registre a saúde financeira (Painel Receita) e acompanhe os dois scores de cada um."),
+            h(Link, { to:"/contador", className:"mt-3 inline-flex rounded-lg bg-gold px-4 py-2 text-sm font-bold text-navy" }, "Abrir Espaço do Contador")));
       }
       // ---------- Painel do Fornecedor ----------
       function SupplierPanel() {
@@ -2354,8 +2396,8 @@
             h(Notice, { tone:"warning", className:"mt-4" }, h("span", null, "Esta área é para escritórios de contabilidade parceiros. Sua conta não tem perfil de contador. ", h(Link, { to:"/escritorio", className:"font-bold text-gold hover:underline" }, "Quero ser parceiro")))));
         }
         return h(PrivateLayout, null,
-          h("h1", { className:"font-serif text-3xl font-black" }, "Meus clientes"),
-          h("p", { className:"mt-2 text-sm text-slate-500" }, "Acompanhe os dois scores de cada cliente e registre a saúde financeira (Painel Receita) por eles."),
+          h("h1", { className:"font-serif text-3xl font-black" }, "Espaço do Contador"),
+          h("p", { className:"mt-2 text-sm text-slate-500" }, "Sua carteira de clientes — acompanhe os dois scores de cada um e registre a saúde financeira (Painel Receita) por eles."),
           h(Card, { className:"mt-5" },
             h("h2", { className:"flex items-center gap-2 font-bold" }, h("span", { className:"flex h-6 w-6 items-center justify-center rounded-md text-gold", style:{ background:"var(--gold-bg2)" } }, h(Icon, { name:"plus", size:14 })), "Adicionar cliente"),
             h("p", { className:"mt-1 text-sm text-slate-500" }, "Digite o CNPJ do cliente — buscamos na Receita e vinculamos ao seu escritório. (Se a empresa já tiver dono no Crivo, é preciso autorização dele.)"),
