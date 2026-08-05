@@ -356,7 +356,10 @@
           const { data: prof } = await supabase.from("profiles").select("*").eq("id", u.id).maybeSingle();
           setProfile(prof || null);
           let comp = null;
-          const { data: link } = await supabase.from("company_users").select("company_id").eq("user_id", u.id).limit(1).maybeSingle();
+          // Prefere o vinculo de dono/admin: um contador ligado a varios clientes
+          // nao pode ter um cliente qualquer escolhido como "a minha empresa".
+          const { data: links } = await supabase.from("company_users").select("company_id, role").eq("user_id", u.id);
+          const link = (links || []).find((l) => l.role === "owner" || l.role === "admin") || (links || [])[0] || null;
           if (link?.company_id) {
             const { data } = await supabase.from("companies").select("*").eq("id", link.company_id).maybeSingle();
             comp = data;
@@ -1951,7 +1954,7 @@ ${docRows?`<h2>Documentos</h2><table><tr><td><b>Documento</b></td><td><b>Status<
 
       // ---------- Documentos ----------
       function Documents() {
-        const { company }=useAuth();
+        const { company, profile }=useAuth();
         const [docs,setDocs]=useState([]);
         const [file,setFile]=useState(null);
         const [tipo,setTipo]=useState("certidao_federal");
@@ -2021,6 +2024,8 @@ ${docRows?`<h2>Documentos</h2><table><tr><td><b>Documento</b></td><td><b>Status<
         return h(PrivateLayout,null,
           h(Card,null,
             h("h1",{className:"font-serif text-4xl font-black"},"Documentos"),
+            company && h("p",{className:"mono-label mt-1 text-gold"},company.razao_social),
+            profile?.role==="accountant" && h(Notice,{tone:"info",className:"mt-4"},h("span",null,"Esta tela mostra apenas os documentos desta empresa. Para enviar e corrigir documentos dos seus clientes, use o ",h(Link,{to:"/contador",className:"font-bold text-gold hover:underline"},"Espaço do Contador"),".")),
             h("p",{className:"mt-2 text-sm text-slate-500"},"A documentação enviada compõe a dimensão \"Documentação Fiscal\" do Score Crivo. Formatos aceitos: PDF, XML, JPG, PNG (até 10MB)."),
             company && h(Notice,{tone:company.listed?"success":"info",className:"mt-4"},
               company.listed
@@ -2434,6 +2439,132 @@ ${docRows?`<h2>Documentos</h2><table><tr><td><b>Documento</b></td><td><b>Status<
               h(Button, { variant:"ghost", onClick:onClose }, "Cancelar"),
               h(Button, { onClick:save, disabled:saving }, saving ? "Salvando..." : "Registrar"))));
       }
+      // Documentos de um cliente, operados pelo escritorio de contabilidade.
+      // O RLS ja permite: quem esta em company_users da empresa pode ler, enviar
+      // e atualizar documentos dela (apagar continua restrito a dono/admin).
+      function ClientDocsModal({ company, onClose, onChanged }) {
+        const dialogRef = useModalA11y(onClose);
+        const [docs, setDocs] = useState([]);
+        const [loaded, setLoaded] = useState(false);
+        const [tipo, setTipo] = useState("certidao_federal");
+        const [valid, setValid] = useState("");
+        const [file, setFile] = useState(null);
+        const [busy, setBusy] = useState(false);
+        const [editing, setEditing] = useState(null);
+        const [newDate, setNewDate] = useState("");
+        const ACCEPTED = [".pdf",".xml",".jpg",".jpeg",".png"];
+        const ACCEPTED_MIME = ["application/pdf","text/xml","application/xml","image/jpeg","image/png"];
+        const MAX_MB = 10;
+
+        async function load() {
+          const { data } = await supabase.from("documents").select("*").eq("company_id", company.id).order("created_at", { ascending:false });
+          setDocs(data || []); setLoaded(true);
+        }
+        useEffect(() => { load(); }, [company.id]);
+        useEffect(() => {
+          const m = DOC_META[tipo];
+          if (m?.hasExpiry && m.dias) setValid(new Date(Date.now()+m.dias*86400000).toISOString().slice(0,10));
+          else if (!m?.hasExpiry) setValid("");
+        }, [tipo]);
+
+        function pickFile(e) {
+          const f = e.target.files[0];
+          if (!f) return setFile(null);
+          const ext = "."+(f.name.split(".").pop()||"").toLowerCase();
+          if (!ACCEPTED.includes(ext)) { e.target.value=""; return toast("Formato nao aceito. Use PDF, XML ou imagem (JPG/PNG).","error"); }
+          if (f.type && !ACCEPTED_MIME.includes(f.type)) { e.target.value=""; return toast("Tipo de arquivo nao corresponde ao formato esperado.","error"); }
+          if (f.size > MAX_MB*1024*1024) { e.target.value=""; return toast("Arquivo muito grande. Limite: "+MAX_MB+"MB.","error"); }
+          setFile(f);
+        }
+        async function send(e) {
+          e.preventDefault();
+          if (!file) return toast("Selecione um arquivo.", "error");
+          if (DOC_META[tipo]?.hasExpiry && !valid) return toast("Informe a data de validade deste documento.", "error");
+          setBusy(true);
+          const path = `${company.id}/${tipo}/${Date.now()}_${file.name.replace(/[^\w.\-]/g,"_")}`;
+          const up = await supabase.storage.from("documents").upload(path, file, { upsert:true });
+          if (up.error) { setBusy(false); return toast(/row-level security|not authorized/i.test(up.error.message) ? "Voce nao tem permissao para enviar documentos deste cliente." : translateError(up.error.message), "error"); }
+          const { error } = await supabase.from("documents").insert({ company_id:company.id, tipo, filename:file.name, storage_path:path, tamanho:file.size, valid_until:valid||null, validade:valid||null, status:"pending", lgpd_consent:true, lgpd_consent_at:new Date().toISOString() });
+          setBusy(false);
+          if (error) return toast(translateError(error.message), "error");
+          setFile(null);
+          const inp = document.getElementById("contador-doc-file"); if (inp) inp.value = "";
+          toast("Documento enviado. Entra como \"em analise\" ate a equipe Crivo aprovar.");
+          load(); onChanged && onChanged();
+        }
+        async function download(d) {
+          const { data, error } = await supabase.storage.from("documents").createSignedUrl(d.storage_path, 3600);
+          if (error || !data?.signedUrl) return toast("Nao foi possivel gerar o link de download.", "error");
+          open(data.signedUrl, "_blank");
+        }
+        async function saveDate(d) {
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) return toast("Informe uma data valida.", "error");
+          const { error } = await supabase.from("documents").update({ valid_until:newDate, validade:newDate }).eq("id", d.id);
+          if (error) return toast(translateError(error.message), "error");
+          setEditing(null); toast("Validade corrigida."); load(); onChanged && onChanged();
+        }
+        function substituir(t) {
+          setTipo(t);
+          const el = document.getElementById("contador-doc-form");
+          if (el) el.scrollIntoView({ behavior:"smooth", block:"center" });
+        }
+        function estado(d) {
+          if (!d) return { label:"Nao enviado", cls:"text-slate-400" };
+          if (d.status === "rejected") return { label:"Rejeitado", cls:"text-danger font-bold" };
+          if (d.status === "pending") return { label:"Em analise", cls:"text-gold" };
+          if (d.valid_until && Date.parse(d.valid_until) < Date.now()) return { label:"Vencido", cls:"text-danger font-bold" };
+          if (d.status === "valid") return { label:"Aprovado", cls:"text-success font-bold" };
+          return { label:d.status || "-", cls:"text-slate-400" };
+        }
+        const ultimoPorTipo = {};
+        docs.forEach((d) => { if (!ultimoPorTipo[d.tipo]) ultimoPorTipo[d.tipo] = d; });
+        const obrig = Object.entries(DOC_META).filter(([,m]) => m.required);
+        const aprovados = obrig.filter(([t]) => estado(ultimoPorTipo[t]).label === "Aprovado").length;
+
+        return h("div", { className:"fixed inset-0 z-50 overflow-y-auto bg-black/70 p-4 backdrop-blur-sm", onClick:(e)=>{ if(e.target===e.currentTarget) onClose(); } },
+          h("div", { ref:dialogRef, role:"dialog", "aria-modal":"true", tabIndex:-1, className:"modal-in mx-auto my-8 w-full max-w-3xl rounded-xl border border-slate-200 bg-navy p-6 outline-none" },
+            h("p", { className:"mono-label text-gold" }, "Documentos do cliente"),
+            h("h2", { className:"mt-1 font-serif text-2xl font-black" }, company.razao_social),
+            h("p", { className:"mt-1 text-sm text-slate-400" }, formatCnpj(company.cnpj), " \u00b7 ",
+              h("span", { className: aprovados === obrig.length ? "text-success font-bold" : "text-gold font-bold" }, `${aprovados} de ${obrig.length} obrigatorios aprovados`)),
+            h("p", { className:"mt-2 text-xs text-slate-500" }, "Voce pode enviar os documentos pelo cliente. Todo envio entra como \"em analise\" e so passa a contar no score depois que a equipe Crivo aprova."),
+
+            h("div", { className:"mt-5 overflow-x-auto" },
+              !loaded
+                ? h("div", { className:"space-y-2" }, [1,2,3].map((i)=>h("div",{key:i,className:"skel h-9 w-full"})))
+                : h("table", { className:"w-full text-left text-sm" },
+                    h("thead", null, h("tr", { className:"border-b border-slate-700" }, ["Documento","Situacao","Validade","Arquivo","Acoes"].map((x)=>h("th",{key:x,className:"py-2 pr-3 text-xs uppercase tracking-wide text-slate-500"},x)))),
+                    h("tbody", null, obrig.concat(Object.entries(DOC_META).filter(([,m])=>!m.required)).map(([t, meta]) => {
+                      const d = ultimoPorTipo[t];
+                      if (!d && !meta.required) return null;
+                      const st = estado(d);
+                      return h("tr", { key:t, className:"border-b border-slate-800" },
+                        h("td", { className:"py-2 pr-3" }, meta.label, meta.required && h("span",{className:"ml-1 text-[10px] text-gold"},"*")),
+                        h("td", { className:"pr-3" }, h("span", { className:st.cls }, st.label)),
+                        h("td", { className:"pr-3 whitespace-nowrap" },
+                          editing === (d && d.id)
+                            ? h("span", { className:"flex items-center gap-1" },
+                                h("input", { type:"date", value:newDate, onChange:(ev)=>setNewDate(ev.target.value), className:"rounded border px-1 py-0.5 text-xs text-navy" }),
+                                h("button", { onClick:()=>saveDate(d), className:"text-xs font-bold text-success" }, "ok"),
+                                h("button", { onClick:()=>setEditing(null), className:"text-xs text-slate-400" }, "x"))
+                            : (d?.valid_until ? new Date(d.valid_until).toLocaleDateString("pt-BR") : "-")),
+                        h("td", { className:"pr-3 max-w-[160px] truncate text-xs text-slate-400" }, d?.filename || "-"),
+                        h("td", { className:"whitespace-nowrap" },
+                          d && h("button", { onClick:()=>download(d), className:"mr-3 text-xs font-bold text-brand hover:underline" }, "Baixar"),
+                          d && h("button", { onClick:()=>{ setEditing(d.id); setNewDate(d.valid_until || ""); }, className:"mr-3 text-xs font-bold text-slate-400 hover:underline" }, "Validade"),
+                          h("button", { onClick:()=>substituir(t), className:"text-xs font-bold text-gold hover:underline" }, d ? "Substituir" : "Enviar")));
+                    }).filter(Boolean)))),
+
+            h("form", { id:"contador-doc-form", onSubmit:send, className:"mt-6 grid gap-3 border-t border-slate-700 pt-5 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end" },
+              h(Field, { label:"Tipo de documento", hint:DOC_META[tipo]?.fonte ? `Onde emitir: ${DOC_META[tipo].fonte}` : undefined },
+                h(Select, { value:tipo, onChange:(e)=>setTipo(e.target.value) }, Object.entries(DOC_META).map(([k,m])=>h("option",{key:k,value:k},m.label)))),
+              h(Field, { label:"Validade", hint:DOC_META[tipo]?.hasExpiry ? "Sugerida automaticamente - ajuste conforme o documento." : "Opcional para este tipo." },
+                h(Input, { type:"date", value:valid, onChange:(e)=>setValid(e.target.value) })),
+              h(Field, { label:"Arquivo" }, h("input", { id:"contador-doc-file", type:"file", accept:ACCEPTED.join(","), onChange:pickFile, className:"w-full rounded-lg border p-2 text-sm" })),
+              h(Button, { type:"submit", disabled:busy }, busy ? "Enviando..." : "Enviar")),
+
+            h("div", { className:"mt-5 flex justify-end" }, h(Button, { variant:"ghost", onClick:onClose }, "Fechar"))));
+      }
       function ContadorPanel() {
         const { user, profile } = useAuth();
         const [clients, setClients] = useState([]);
@@ -2442,6 +2573,8 @@ ${docRows?`<h2>Documentos</h2><table><tr><td><b>Documento</b></td><td><b>Status<
         const [adding, setAdding] = useState(false);
         const [selected, setSelected] = useState(null);
         const [finFor, setFinFor] = useState(null);
+        const [docsFor, setDocsFor] = useState(null);
+        const [docsByClient, setDocsByClient] = useState({});
         const [tasks, setTasks] = useState([]);
         const [nt, setNt] = useState({ company_id:"", title:"" });
         const isAccountant = profile?.role === "accountant" || profile?.role === "admin";
@@ -2454,6 +2587,10 @@ ${docRows?`<h2>Documentos</h2><table><tr><td><b>Documento</b></td><td><b>Status<
           setClients((comps||[]).map((c)=>({ ...c, conformidade: latest(c.scores,"calculated_at")?.total ?? null, financeira: latest(c.financial_scores,"created_at")?.total ?? null })));
           const { data: tk } = await supabase.from("tasks").select("*").in("company_id", ids).order("created_at", { ascending:false });
           setTasks(tk || []);
+          const { data: ds } = await supabase.from("documents").select("company_id, tipo, status, valid_until").in("company_id", ids);
+          const mapDocs = {};
+          (ds || []).forEach((d) => { (mapDocs[d.company_id] = mapDocs[d.company_id] || []).push(d); });
+          setDocsByClient(mapDocs);
           setLoaded(true);
         }
         async function addTask(e) {
@@ -2504,7 +2641,7 @@ ${docRows?`<h2>Documentos</h2><table><tr><td><b>Documento</b></td><td><b>Status<
         }
         return h(PrivateLayout, null,
           h("h1", { className:"font-serif text-3xl font-black" }, "Espaço do Contador"),
-          h("p", { className:"mt-2 text-sm text-slate-500" }, "Sua carteira de clientes — acompanhe os dois scores de cada um e registre a saúde financeira (Painel Receita) por eles."),
+          h("p", { className:"mt-2 text-sm text-slate-500" }, "Sua carteira de clientes — acompanhe os dois scores, envie e corrija os documentos por eles e registre a saúde financeira (Painel Receita)."),
           h(Card, { className:"mt-5" },
             h("h2", { className:"flex items-center gap-2 font-bold" }, h("span", { className:"flex h-6 w-6 items-center justify-center rounded-md text-gold", style:{ background:"var(--gold-bg2)" } }, h(Icon, { name:"plus", size:14 })), "Adicionar cliente"),
             h("p", { className:"mt-1 text-sm text-slate-500" }, "Digite o CNPJ do cliente — buscamos na Receita e vinculamos ao seu escritório. (Se a empresa já tiver dono no Crivo, é preciso autorização dele.)"),
@@ -2518,7 +2655,7 @@ ${docRows?`<h2>Documentos</h2><table><tr><td><b>Documento</b></td><td><b>Status<
               : clients.length === 0
                 ? h("p", { className:"mt-4 text-sm text-slate-500" }, "Nenhum cliente ainda. Adicione o primeiro acima para começar a monitorar.")
                 : h("table", { className:"mt-4 w-full text-left text-sm" },
-                    h("thead", null, h("tr", { className:"border-b" }, ["Cliente","CNPJ","Conformidade","Saúde Financeira","Situação","Ações"].map((x)=>h("th",{key:x,className:"py-2 pr-3"},x)))),
+                    h("thead", null, h("tr", { className:"border-b" }, ["Cliente","CNPJ","Conformidade","Saúde Financeira","Documentos","Situação","Ações"].map((x)=>h("th",{key:x,className:"py-2 pr-3"},x)))),
                     h("tbody", null, clients.map((c)=>{
                       const rr = risk(c.conformidade), fr = finRisk(c.financeira);
                       return h("tr", { key:c.id, className:"data-row border-b" },
@@ -2526,9 +2663,16 @@ ${docRows?`<h2>Documentos</h2><table><tr><td><b>Documento</b></td><td><b>Status<
                         h("td", { className:"pr-3 whitespace-nowrap" }, formatCnpj(c.cnpj)),
                         h("td", { className:"pr-3" }, c.conformidade!=null ? h("span",{className:`rounded-full px-2 py-1 text-xs font-bold ${rr.soft} ${rr.text}`},Math.round(c.conformidade)) : h("span",{className:"text-xs text-slate-400"},"—")),
                         h("td", { className:"pr-3 whitespace-nowrap" }, c.financeira!=null ? h("span",{className:`rounded-full px-2 py-1 text-xs font-bold ${fr.soft} ${fr.text}`},`${Math.round(c.financeira)} · ${fr.label}`) : h("span",{className:"text-xs text-slate-400"},"não informada")),
+                        h("td", { className:"pr-3 whitespace-nowrap" }, (() => {
+                          const list = docsByClient[c.id] || [];
+                          const ok = Object.entries(DOC_META).filter(([t,m]) => m.required && list.some((d) => d.tipo===t && d.status==="valid" && (!d.valid_until || Date.parse(d.valid_until) >= Date.now()))).length;
+                          const cls = ok === REQUIRED_DOC_COUNT ? "text-success" : ok === 0 ? "text-danger" : "text-gold";
+                          return h("span", { className:`text-xs font-bold ${cls}` }, `${ok}/${REQUIRED_DOC_COUNT}`);
+                        })()),
                         h("td", { className:"pr-3" }, h("span",{className:c.situacao_rfb==="ativa"?"text-success":"text-danger"}, c.situacao_rfb||"—")),
                         h("td", { className:"whitespace-nowrap" },
                           h("button", { onClick:()=>setSelected(c), className:"mr-3 text-xs font-bold text-brand hover:underline" }, "Ver análise"),
+                          h("button", { onClick:()=>setDocsFor(c), className:"mr-3 text-xs font-bold text-brand hover:underline" }, "Documentos"),
                           h("button", { onClick:()=>setFinFor(c), className:"text-xs font-bold text-gold hover:underline" }, "Saúde financeira")));
                     }))),
             h(ScoreDisclaimer)),
@@ -2552,6 +2696,7 @@ ${docRows?`<h2>Documentos</h2><table><tr><td><b>Documento</b></td><td><b>Status<
               }));
             })()),
           selected && h(KypModal, { company:selected, onClose:()=>setSelected(null) }),
+          docsFor && h(ClientDocsModal, { company:docsFor, onClose:()=>setDocsFor(null), onChanged:load }),
           finFor && h(FinancialModal, { company:finFor, onClose:()=>setFinFor(null), onSaved:()=>{ setFinFor(null); load(); } }));
       }
       function AdminPage() {
