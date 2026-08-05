@@ -175,6 +175,10 @@
 
       // ---------- Helpers ----------
       function cleanCnpj(v) { return String(v || "").replace(/\D/g, ""); }
+      // Teclado de celular e gerenciador de senha costumam devolver o e-mail com
+      // espaco no fim ou com a primeira letra maiuscula. O Supabase rejeita o
+      // login nesses casos ("credenciais invalidas"), entao normalizamos sempre.
+      function normEmail(v) { return String(v || "").trim().toLowerCase(); }
       function formatCnpj(v) {
         const d = cleanCnpj(v).slice(0, 14);
         return d.replace(/^(\d{2})(\d)/, "$1.$2").replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3").replace(/\.(\d{3})(\d)/, ".$1/$2").replace(/(\d{4})(\d)/, "$1-$2");
@@ -1326,14 +1330,14 @@ ${docRows?`<h2>Documentos</h2><table><tr><td><b>Documento</b></td><td><b>Status<
         const next = new URLSearchParams(location.search).get("next") || "/painel";
         async function submit(e){
           e.preventDefault(); setErr(null); setLoading(true);
-          const { error } = await supabase.auth.signInWithPassword({ email, password });
+          const { error } = await supabase.auth.signInWithPassword({ email: normEmail(email), password });
           setLoading(false);
           if(error) return setErr(translateError(error.message));
           window.__route.nav(next);
         }
         async function reset(){
           if(!email) return toast("Digite seu e-mail primeiro.","error");
-          await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${location.origin}/auth/callback?type=recovery` });
+          await supabase.auth.resetPasswordForEmail(normEmail(email), { redirectTo: `${location.origin}/auth/callback?type=recovery` });
           toast("Verifique seu e-mail para redefinir a senha.");
         }
         return h(PublicLayout,null,h("main",{className:"mx-auto max-w-md px-4 py-16"},h(Card,null,
@@ -1395,15 +1399,15 @@ ${docRows?`<h2>Documentos</h2><table><tr><td><b>Documento</b></td><td><b>Status<
           if (step < 3) return next();
           for (const s of [1,2,3]) { const err = stepError(s); if (err) { setStep(s); return toast(err, "error"); } }
           setLoading(true);
-          const pending = { email:form.email, nome:form.nome, perfil:form.perfil, cnpj:cleanCnpj(form.cnpj), razao_social:form.razao_social, nome_fantasia:form.nome_fantasia, telefone:form.telefone, segmento:form.segmento, plano:form.plano, _savedAt: Date.now() };
+          const pending = { email:normEmail(form.email), nome:form.nome, perfil:form.perfil, cnpj:cleanCnpj(form.cnpj), razao_social:form.razao_social, nome_fantasia:form.nome_fantasia, telefone:form.telefone, segmento:form.segmento, plano:form.plano, _savedAt: Date.now() };
           localStorage.setItem(PENDING_KEY, JSON.stringify(pending));
           const { data: authData, error: authError } = await supabase.auth.signUp({
-            email:form.email, password:form.password,
+            email:normEmail(form.email), password:form.password,
             options:{ data:{ nome:form.nome, cargo:form.cargo, cnpj:cleanCnpj(form.cnpj) }, emailRedirectTo:`${location.origin}/auth/callback` }
           });
           if(authError || !authData?.user){ setLoading(false); return toast(translateError(authError?.message || "Erro ao criar usuário"),"error"); }
-          supabase.from("leads").insert({ tipo:"cadastro", source:"cadastro", nome:form.nome, email:form.email, cnpj:cleanCnpj(form.cnpj), plano_interesse:form.plano, origem:"organico", status:"novo" }).then(()=>null);
-          supabase.functions.invoke("send-email", { body:{ tipo:"boas-vindas", email:form.email, nome:form.nome, subject:"Bem-vindo ao Crivo", body:"Sua conta Crivo foi criada. Acesse o painel para adicionar seus primeiros fornecedores." }}).catch(logFail("e-mail de boas-vindas"));
+          supabase.from("leads").insert({ tipo:"cadastro", source:"cadastro", nome:form.nome, email:normEmail(form.email), cnpj:cleanCnpj(form.cnpj), plano_interesse:form.plano, origem:"organico", status:"novo" }).then(()=>null);
+          supabase.functions.invoke("send-email", { body:{ tipo:"boas-vindas", email:normEmail(form.email), nome:form.nome, subject:"Bem-vindo ao Crivo", body:"Sua conta Crivo foi criada. Acesse o painel para adicionar seus primeiros fornecedores." }}).catch(logFail("e-mail de boas-vindas"));
           if (authData.session) {
             await completeSetup(authData.user, pending);
             setLoading(false);
